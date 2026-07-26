@@ -2012,6 +2012,26 @@ function saveCricApiKey(key){
   toast(cricApiKey?'🔑 CricAPI key saved — auto-fetch active!':'API key cleared');
 }
 
+// Set all players to the same pick in one tap — Option D quick pick
+// opt: 'home', 'away', or null (clears all picks for the match)
+async function setAllPicks(mid, opt){
+  if(!players.length)return;
+  if(!predictions[mid])predictions[mid]={};
+  var newVal=opt;
+  if(opt==='home'||opt==='away'){
+    var allSame=players.every(function(p){return predictions[mid][p]===opt;});
+    if(allSame)newVal=null; // toggle off if all already same
+  }
+  clearStatsCache();
+  var ops=players.map(function(p){
+    if(!newVal){delete predictions[mid][p];return sbDelete('predictions','match_id=eq.'+mid+'&player_name=eq.'+p);}
+    predictions[mid][p]=newVal;
+    return sbUpsert('predictions',{match_id:mid,player_name:p,pick:newVal,updated_at:new Date().toISOString()});
+  });
+  render();
+  try{await Promise.all(ops);}catch(e){toast('❌ Save failed');console.error(e);}
+}
+
 // ── Main render ───────────────────────────────────────────────
 function render(){
   setAccentColor(selWeek);
@@ -2021,14 +2041,26 @@ function render(){
 
   (function(){var e=document.getElementById("pickDateFilter");e.innerHTML="";["all",...dates].forEach(function(d){var b=document.createElement("button");b.className="d-btn"+(selPickDate===d?" active":"");b.textContent=d==="all"?"All":d;(function(dt){b.onclick=function(){setPickDate(dt);};})(d);e.appendChild(b);});})();
   const pMatches=selPickDate==="all"?MATCHES:MATCHES.filter(m=>m.date===selPickDate);
+
   document.getElementById("pickMatches").innerHTML=pMatches.map(m=>{
     const teams=getMatchTeams(m);
     const res=results[m.id],hn=teams.home.replace(/^\S+\s/,''),an=teams.away.replace(/^\S+\s/,'');const resLabel=res==='home'?hn:res==='away'?an:'';
     const isKO=isKnockoutMatch(m);
     const pickOpts=["home","away"]; // Cricket: no draw ever
-    const playerRows=players.map(p=>{const pick=predictions[m.id]?.[p];return'<tr><td>'+p+'</td>'+pickOpts.map(opt=>{const s=pick===opt,c=res&&res===opt,lbl=opt==='home'?hn:false?'Draw':an;return'<td><button class="p-btn '+opt+' '+(s?'sel':'')+' '+(c&&s?'correct':'')+'" onclick="setPick('+m.id+',\''+p+'\',\''+opt+'\')">'+lbl+'</button></td>';}).join('')+'</tr>';}).join('');
+    // Count current picks for this match
+    const homeCount=players.filter(p=>predictions[m.id]?.[p]==='home').length;
+    const awayCount=players.filter(p=>predictions[m.id]?.[p]==='away').length;
+    const totalPicked=homeCount+awayCount;
+    // "Set all" row — big buttons to set everyone at once, + clear
+    const setAllRow='<div style="display:flex;gap:6px;padding:8px 10px 4px;background:#081428;border-bottom:1px solid #1a3a66;">'
+      +'<span style="font-size:10px;color:#7a9bb5;align-self:center;white-space:nowrap;">Set all →</span>'
+      +'<button onclick="setAllPicks('+m.id+',\'home\')" style="flex:1;padding:6px;background:'+(homeCount===players.length?'#1a5c2e':'#0e2240')+';border:1px solid '+(homeCount===players.length?'#1a8c4e':'#24507e')+';border-radius:8px;color:'+(homeCount===players.length?'#00c853':'#a0c8e8')+';font-size:11px;font-weight:800;cursor:pointer;">'+hn+' ('+homeCount+')</button>'
+      +'<button onclick="setAllPicks('+m.id+',\'away\')" style="flex:1;padding:6px;background:'+(awayCount===players.length?'#1a5c2e':'#0e2240')+';border:1px solid '+(awayCount===players.length?'#1a8c4e':'#24507e')+';border-radius:8px;color:'+(awayCount===players.length?'#00c853':'#a0c8e8')+';font-size:11px;font-weight:800;cursor:pointer;">'+an+' ('+awayCount+')</button>'
+      +(totalPicked>0?'<button onclick="setAllPicks('+m.id+',null)" style="padding:6px 10px;background:#0e2240;border:1px solid #24507e;border-radius:8px;color:#5a7a99;font-size:11px;cursor:pointer;">✕ Clear</button>':'')
+      +'</div>';
+    const playerRows=players.map(p=>{const pick=predictions[m.id]?.[p];return'<tr><td>'+p+'</td>'+pickOpts.map(opt=>{const s=pick===opt,c=res&&res===opt,lbl=opt==='home'?hn:an;return'<td><button class="p-btn '+opt+' '+(s?'sel':'')+' '+(c&&s?'correct':'')+'" onclick="setPick('+m.id+',\''+p+'\',\''+opt+'\')">'+lbl+'</button></td>';}).join('')+'</tr>';}).join('');
     const tableHeader='<tr><th>Player</th><th>'+hn+'</th><th>'+an+'</th></tr>';
-    return'<div class="card"><div class="card-header"><span>M'+m.id+(isKO?' <span class="lucky-badge" style="background:#7c3aed;color:#fff;font-size:9px;">🏆 '+(m.round||'').toUpperCase()+'</span>':'')+' · '+m.date+' · '+teams.home+' <span style="color:#7a9bb5;">vs</span> '+teams.away+(!isKO&&(luckyMatchIds.has(m.id)||luckyHistory.some(function(h){return h.id===m.id;}))?' <span class="lucky-badge">🍀 '+getLuckyMatchPts(m.id)+'pts</span>':'')+(!isKO&&(deadmanMatchIds.has(m.id)||deadmanHistory.some(function(h){return h.id===m.id;}))?' <span class="lucky-badge" style="background:#dc2626;color:#fff;">💀 ±'+getDeadmanMatchPts(m.id)+'pts</span>':'')+(isBoldPickMatch(m.id)?' <span class="lucky-badge" style="background:#1a8c4e;color:#000;">💪 Bold +'+getBoldPickPts(m.id).win+'/'+getBoldPickPts(m.id).loss+'pts</span>':'')+'</span>'+(res?'<span class="locked-tag">✓ '+resLabel+'</span>':m.time?'<span style="color:#7a9bb5;font-size:10px;">⏱ '+formatKickoff(m.time)+'</span>':'<span style="color:#7a9bb5;font-size:10px;">pending</span>')+'</div><div class="card-body pred-grid"><table>'+tableHeader+playerRows+'</table></div></div>';
+    return'<div class="card"><div class="card-header"><span>M'+m.id+(isKO?' <span class="lucky-badge" style="background:#7c3aed;color:#fff;font-size:9px;">🏆 '+(m.round||'').toUpperCase()+'</span>':'')+' · '+m.date+' · '+teams.home+' <span style="color:#7a9bb5;">vs</span> '+teams.away+(!isKO&&(luckyMatchIds.has(m.id)||luckyHistory.some(function(h){return h.id===m.id;}))?' <span class="lucky-badge">🍀 '+getLuckyMatchPts(m.id)+'pts</span>':'')+(!isKO&&(deadmanMatchIds.has(m.id)||deadmanHistory.some(function(h){return h.id===m.id;}))?' <span class="lucky-badge" style="background:#dc2626;color:#fff;">💀 ±'+getDeadmanMatchPts(m.id)+'pts</span>':'')+(isBoldPickMatch(m.id)?' <span class="lucky-badge" style="background:#1a8c4e;color:#000;">💪 Bold +'+getBoldPickPts(m.id).win+'/'+getBoldPickPts(m.id).loss+'pts</span>':'')+'</span>'+(res?'<span class="locked-tag">✓ '+resLabel+'</span>':m.time?'<span style="color:#7a9bb5;font-size:10px;">⏱ '+formatKickoff(m.time)+'</span>':'<span style="color:#7a9bb5;font-size:10px;">pending</span>')+'</div>'+setAllRow+'<div class="card-body pred-grid"><table>'+tableHeader+playerRows+'</table></div></div>';
   }).join('');
 
   (function(){var e=document.getElementById("resDateFilter");e.innerHTML="";["all",...dates].forEach(function(d){var b=document.createElement("button");b.className="d-btn"+(selResDate===d?" active":"");b.textContent=d==="all"?"All":d;(function(dt){b.onclick=function(){setResDate(dt);};})(d);e.appendChild(b);});})();
