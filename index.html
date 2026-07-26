@@ -1517,10 +1517,12 @@ function getDeadmanMatchPts(mid){
   return deadmanPoints;
 }
 function isLuckyMatch(mid){
-  return luckyMatchIds.has(mid)||luckyHistory.some(function(h){return h.id===mid;});
+  // Only check the ACTIVE set — history is for scoring only, not UI state
+  // A match can be "in history" (result counted) but not "active" (toggle showing ON)
+  return luckyMatchIds.has(mid);
 }
 function isDeadmanMatch(mid){
-  return deadmanMatchIds.has(mid)||deadmanHistory.some(function(h){return h.id===mid;});
+  return deadmanMatchIds.has(mid);
 }
 function saveLuckyDip(){
   var idsStr=[...luckyMatchIds].join(',');
@@ -1938,35 +1940,80 @@ function renderPoll(){
 
 
 // ── CricAPI Auto-Fetch Results ──────────────────────────────────
-// Automatically fetches live cricket scores from cricketdata.org
-// and enters results when a match ends. Admin sets API key in settings.
-var cricApiKey='d65c3df3-b670-4ec2-8610-17a8ba42fd54'; // CricAPI key — cricketdata.org
+// Smart polling: admin-only, time-window gated, 5-min intervals.
+// Participants NEVER hit the API — they read from Supabase only.
+// API only called when a match is currently within its live window.
+// Free tier: 100 calls/day. This approach uses ~5-10 calls per match day.
+var cricApiKey='d65c3df3-b670-4ec2-8610-17a8ba42fd54';
 var cricFetchInterval=null;
 var cricLastFetch=0;
+var CRIC_POLL_INTERVAL=5*60*1000;  // 5 minutes between polls
+var CRIC_MATCH_WINDOW=4*60*60*1000; // matches are live up to 4hrs after start
+
+// Is any match currently in its live window?
+function isAnyMatchLive(){
+  var now=Date.now();
+  return MATCHES.some(function(m){
+    if(!m.time)return false;
+    if(results[m.id])return false; // already have result
+    var start=new Date(m.time).getTime();
+    return now>=start && now<=(start+CRIC_MATCH_WINDOW);
+  });
+}
+
+// Returns minutes until the next match starts (or 0 if one is live)
+function minsUntilNextMatch(){
+  var now=Date.now();
+  var upcoming=MATCHES
+    .filter(function(m){return m.time&&!results[m.id]&&new Date(m.time).getTime()>now;})
+    .map(function(m){return new Date(m.time).getTime();})
+    .sort(function(a,b){return a-b;});
+  if(!upcoming.length)return null; // no more matches
+  return Math.max(0,Math.round((upcoming[0]-now)/60000));
+}
 
 function startCricAutoFetch(){
+  // ADMIN ONLY — never run in share/read-only mode
+  if(isShareMode)return;
+  if(!cricApiKey)return;
   if(cricFetchInterval)clearInterval(cricFetchInterval);
-  if(!cricApiKey){console.log('CricAPI: no key set');return;}
-  console.log('CricAPI: starting auto-fetch...');
-  fetchCricResults(); // immediate first fetch
-  cricFetchInterval=setInterval(fetchCricResults,60000); // every 60s
+
+  // Do one immediate check, then schedule smart polling
+  maybeFetchCricResults();
+  cricFetchInterval=setInterval(maybeFetchCricResults, CRIC_POLL_INTERVAL);
 }
 
 function stopCricAutoFetch(){
   if(cricFetchInterval){clearInterval(cricFetchInterval);cricFetchInterval=null;}
 }
 
-async function fetchCricResults(){
-  if(!cricApiKey)return;
+async function maybeFetchCricResults(){
+  // Only hit the API if a match is currently in its live window
+  if(!isAnyMatchLive()){
+    var mins=minsUntilNextMatch();
+    if(mins!==null){
+      console.log('CricAPI: no live match — next match in ~'+mins+' mins. Skipping API call.');
+    }else{
+      console.log('CricAPI: all matches complete. Stopping polling.');
+      stopCricAutoFetch();
+    }
+    return;
+  }
+  // Throttle: min 4 mins between actual API calls (safety net)
   var now=Date.now();
-  if(now-cricLastFetch<30000)return; // throttle: min 30s between fetches
+  if(now-cricLastFetch<4*60*1000)return;
   cricLastFetch=now;
   try{
+    console.log('CricAPI: live match window active — fetching results...');
     var url='https://api.cricapi.com/v1/currentMatches?apikey='+cricApiKey+'&offset=0';
     var resp=await fetch(url);
-    if(!resp.ok)throw new Error('CricAPI error: '+resp.status);
+    if(!resp.ok)throw new Error('CricAPI HTTP '+resp.status);
     var data=await resp.json();
-    if(data.status!=='success'||!data.data)return;
+    if(data.status!=='success'||!data.data){
+      console.warn('CricAPI: unexpected response',data.status);return;
+    }
+    var remaining=data.info&&data.info.hitsLimit?(data.info.hitsLimit-data.info.hitsUsed):'?';
+    console.log('CricAPI: fetched OK. API calls remaining today: '+remaining);
     processCricMatches(data.data);
   }catch(e){
     console.error('CricAPI fetch failed:',e);
@@ -1974,7 +2021,6 @@ async function fetchCricResults(){
 }
 
 function normTeam(name){
-  // Normalize team names for fuzzy matching
   if(!name)return'';
   name=name.toLowerCase().trim();
   var MAP={
@@ -1996,36 +2042,24 @@ function normTeam(name){
 function processCricMatches(apiMatches){
   var changed=false;
   MATCHES.forEach(function(m){
-    if(results[m.id])return; // already have result
+    if(results[m.id])return;
     var mHome=normTeam(m.home);
     var mAway=normTeam(m.away);
-    if(mHome==='tbd'||mAway==='tbd'||mHome.indexOf('❓')!==-1)return;
-    
-    // Find matching API match
+    if(!mHome||!mAway||mHome.indexOf('❓')!==-1||mAway.indexOf('❓')!==-1)return;
     var apiMatch=apiMatches.find(function(am){
       var t1=normTeam(am.teams&&am.teams[0]||'');
       var t2=normTeam(am.teams&&am.teams[1]||'');
       return(t1===mHome&&t2===mAway)||(t1===mAway&&t2===mHome);
     });
-    if(!apiMatch)return;
-    
-    // Match must be completed
-    if(!apiMatch.matchEnded)return;
-    
-    // Determine winner
-    var winner=apiMatch.matchWinner;
-    if(!winner)return;
-    var wNorm=normTeam(winner);
-    var resultVal=null;
-    if(wNorm===mHome)resultVal='home';
-    else if(wNorm===mAway)resultVal='away';
+    if(!apiMatch||!apiMatch.matchEnded||!apiMatch.matchWinner)return;
+    var wNorm=normTeam(apiMatch.matchWinner);
+    var resultVal=wNorm===mHome?'home':wNorm===mAway?'away':null;
     if(!resultVal)return;
-    
-    console.log('CricAPI: auto-result M'+m.id+' → '+resultVal+' ('+winner+')');
+    console.log('CricAPI: auto-result M'+m.id+' → '+resultVal+' ('+apiMatch.matchWinner+')');
     setResult(m.id,resultVal);
     changed=true;
   });
-  if(changed)toast('🏏 Results updated from CricAPI!');
+  if(changed)toast('🏏 Results updated from live scores!');
 }
 
 function saveCricApiKey(key){
@@ -2033,7 +2067,6 @@ function saveCricApiKey(key){
   sbUpsert('settings',{key:'cricapi_key',value:cricApiKey,updated_at:new Date().toISOString()}).catch(function(e){console.error(e);});
   if(cricApiKey)startCricAutoFetch();
   else stopCricAutoFetch();
-  toast(cricApiKey?'🔑 CricAPI key saved — auto-fetch active!':'API key cleared');
 }
 
 // Set all players to the same pick in one tap — Option D quick pick
@@ -2212,25 +2245,11 @@ function render(){
     // - No result → full freedom
     var inHistory=luckyHistory.some(function(h){return h.id===m.id;});
     if(res&&isLucky&&inHistory){
-      // Locked ON — match done and already in history
+      // Locked ON — result already counted, can't remove
       tInput.disabled=true;
-      toggleWrap.title='Lucky dip locked — result already counted';
-    } else if(res&&!isLucky){
-      // Allow turning ON for a completed match (e.g. retroactively mark M6)
-      tInput.disabled=false;
-      toggleWrap.title='Mark as lucky dip (retroactive)';
+      toggleWrap.title='Lucky Dip locked — result already counted';
     }
-    // Mutual exclusivity: disable Lucky Dip if Deadman active — BUT allow toggle OFF if self is checked
-    var _isDeadmanCheck=deadmanMatchIds.has(m.id)||deadmanHistory.some(function(h){return h.id===m.id;});
-    if(_isDeadmanCheck&&!isLucky){
-      // Deadman is on, Lucky Dip is off — disable Lucky Dip toggle
-      tInput.disabled=true;
-      toggleWrap.title='Cannot combine with Deadman\'s Match on the same match';
-    } else if(_isDeadmanCheck&&isLucky){
-      // CONFLICT: both somehow active — allow toggling Lucky Dip OFF to resolve
-      tInput.disabled=false;
-      toggleWrap.title='⚠️ Conflict: tap to turn off Lucky Dip';
-    }
+    // No other disable conditions — auto-switch handles mutual exclusivity
     var tSlider=document.createElement('span');tSlider.className='toggle-slider';
     toggleWrap.appendChild(tInput);toggleWrap.appendChild(tSlider);
 
@@ -2251,34 +2270,38 @@ function render(){
     (function(mid,card,tIn,pSel,badge,lbl){
       tIn.onchange=function(){
         if(tIn.checked){
-          // Auto-clear Deadman's Match on this same match — mutually exclusive
-          if(deadmanMatchIds.has(mid)||deadmanHistory.some(function(h){return h.id===mid;})){
+          // Turning Lucky Dip ON — auto-clear Deadman immediately (no manual step needed)
+          if(deadmanMatchIds.has(mid)){
             deadmanMatchIds.delete(mid);
             delete deadmanPtsMap[mid];
-            deadmanHistory=deadmanHistory.filter(function(h){return h.id!==mid;});
+            if(!results[mid]){
+              // No result yet — safe to also clear deadman history
+              deadmanHistory=deadmanHistory.filter(function(h){return h.id!==mid;});
+              sbDelete('settings','key=eq.deadman_history_'+mid).catch(function(e){console.error(e);});
+            }
             deadmanMatchId=deadmanMatchIds.size?[...deadmanMatchIds][deadmanMatchIds.size-1]:null;
-            Promise.all([
-              sbDelete('settings','key=eq.deadman_history_'+mid),
-              sbDelete('settings','key=eq.deadman_pts_'+mid)
-            ]).catch(function(e){console.error(e);});
+            sbDelete('settings','key=eq.deadman_pts_'+mid).catch(function(e){console.error(e);});
             saveDeadmanMatch();
           }
           luckyMatchIds.add(mid);
           luckyMatchId=mid;
           luckyPoints=parseInt(pSel.value);
           luckyPtsMap[mid]=luckyPoints;
-          // If match already has result, save to history immediately
           if(results[mid]&&!luckyHistory.find(function(h){return h.id===mid;})){
             luckyHistory.push({id:mid,pts:luckyPtsMap[mid]});
             sbUpsert('settings',{key:'lucky_history_'+mid,value:String(luckyPtsMap[mid]),updated_at:new Date().toISOString()}).catch(function(e){console.error(e);});
           }
-        } else{
-          // Toggle OFF — clean up completely
+        } else {
+          // Turning Lucky Dip OFF — clean everything including stale history
           luckyMatchIds.delete(mid);
           delete luckyPtsMap[mid];
           luckyMatchId=luckyMatchIds.size?[...luckyMatchIds][luckyMatchIds.size-1]:null;
-          // Delete per-match pts from Supabase so it doesn't ghost-reload
           sbDelete('settings','key=eq.lucky_pts_'+mid).catch(function(e){console.error(e);});
+          if(!results[mid]){
+            // No result yet — safe to clear stale history too
+            luckyHistory=luckyHistory.filter(function(h){return h.id!==mid;});
+            sbDelete('settings','key=eq.lucky_history_'+mid).catch(function(e){console.error(e);});
+          }
         }
         card.style.borderColor=tIn.checked?'#c0392b':'';
         card.style.boxShadow=tIn.checked?'0 0 10px #c0392b44':'';
@@ -2349,22 +2372,11 @@ function render(){
     dmInput.type='checkbox';dmInput.className='deadman-toggle';dmInput.checked=isDeadman;
     var dmInHistory=deadmanHistory.some(function(h){return h.id===m.id;});
     if(res&&isDeadman&&dmInHistory){
+      // Locked ON — result already counted, can't remove
       dmInput.disabled=true;
       dmToggleWrap.title='Deadman\'s Match locked — result already counted';
-    } else if(res&&!isDeadman){
-      dmInput.disabled=false;
-      dmToggleWrap.title='Mark as Deadman\'s Match (retroactive)';
     }
-    // Mutual exclusivity: disable Deadman if Lucky Dip active — BUT allow toggle OFF if self is checked
-    if(isLucky&&!isDeadman){
-      // Lucky Dip is on, Deadman is off — disable Deadman toggle
-      dmInput.disabled=true;
-      dmToggleWrap.title='Cannot combine with Lucky Dip on the same match';
-    } else if(isLucky&&isDeadman){
-      // CONFLICT: both somehow active — allow toggling Deadman OFF to resolve
-      dmInput.disabled=false;
-      dmToggleWrap.title='⚠️ Conflict: tap to turn off Deadman\'s Match';
-    }
+    // No other disable conditions — auto-switch handles mutual exclusivity
     var dmSlider=document.createElement('span');dmSlider.className='toggle-slider';
     dmToggleWrap.appendChild(dmInput);dmToggleWrap.appendChild(dmSlider);
 
@@ -2385,16 +2397,16 @@ function render(){
     (function(mid,card,tIn,sel,badge,lbl){
       tIn.onchange=function(){
         if(tIn.checked){
-          // Auto-clear Lucky Dip on this same match — mutually exclusive
-          if(luckyMatchIds.has(mid)||luckyHistory.some(function(h){return h.id===mid;})){
+          // Turning Deadman ON — auto-clear Lucky Dip immediately (no manual step needed)
+          if(luckyMatchIds.has(mid)){
             luckyMatchIds.delete(mid);
             delete luckyPtsMap[mid];
-            luckyHistory=luckyHistory.filter(function(h){return h.id!==mid;});
+            if(!results[mid]){
+              luckyHistory=luckyHistory.filter(function(h){return h.id!==mid;});
+              sbDelete('settings','key=eq.lucky_history_'+mid).catch(function(e){console.error(e);});
+            }
             luckyMatchId=luckyMatchIds.size?[...luckyMatchIds][luckyMatchIds.size-1]:null;
-            Promise.all([
-              sbDelete('settings','key=eq.lucky_history_'+mid),
-              sbDelete('settings','key=eq.lucky_pts_'+mid)
-            ]).catch(function(e){console.error(e);});
+            sbDelete('settings','key=eq.lucky_pts_'+mid).catch(function(e){console.error(e);});
             saveLuckyDip();
           }
           deadmanMatchIds.add(mid);
@@ -2405,13 +2417,16 @@ function render(){
             deadmanHistory.push({id:mid,pts:deadmanPtsMap[mid]});
             sbUpsert('settings',{key:'deadman_history_'+mid,value:String(deadmanPtsMap[mid]),updated_at:new Date().toISOString()}).catch(function(e){console.error(e);});
           }
-        } else{
-          // Toggle OFF — clean up completely
+        } else {
+          // Turning Deadman OFF — clean everything including stale history
           deadmanMatchIds.delete(mid);
           delete deadmanPtsMap[mid];
           deadmanMatchId=deadmanMatchIds.size?[...deadmanMatchIds][deadmanMatchIds.size-1]:null;
-          // Delete per-match pts from Supabase so it doesn't ghost-reload
           sbDelete('settings','key=eq.deadman_pts_'+mid).catch(function(e){console.error(e);});
+          if(!results[mid]){
+            deadmanHistory=deadmanHistory.filter(function(h){return h.id!==mid;});
+            sbDelete('settings','key=eq.deadman_history_'+mid).catch(function(e){console.error(e);});
+          }
         }
         card.style.borderColor=tIn.checked?'#7a2020':'';
         card.style.boxShadow=tIn.checked?'0 0 10px #dc262644':'';
