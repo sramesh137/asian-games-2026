@@ -418,6 +418,28 @@ async function loadAll(){
     deadmanMatchIds.forEach(function(mid){
       if(!deadmanPtsMap[mid])deadmanPtsMap[mid]=deadmanPoints;
     });
+    // ── Enforce mutual exclusivity at load time ──────────────────
+    // If a match is in both luckyMatchIds AND deadmanMatchIds (Supabase conflict),
+    // keep the one that has history (result already counted), clear the other.
+    // If neither has history, prefer Lucky Dip and clear Deadman.
+    var conflictIds=[];
+    luckyMatchIds.forEach(function(mid){if(deadmanMatchIds.has(mid))conflictIds.push(mid);});
+    conflictIds.forEach(function(mid){
+      var inLuckyHistory=luckyHistory.some(function(h){return h.id===mid;});
+      var inDeadHistory=deadmanHistory.some(function(h){return h.id===mid;});
+      if(inLuckyHistory||(!inDeadHistory)){
+        // Keep Lucky Dip, clear Deadman
+        deadmanMatchIds.delete(mid);delete deadmanPtsMap[mid];
+        sbDelete('settings','key=eq.deadman_pts_'+mid).catch(function(e){console.error(e);});
+        sbDelete('settings','key=eq.deadman_match_id').catch(function(e){console.error(e);});
+        saveDeadmanMatch();
+      } else {
+        // Keep Deadman, clear Lucky Dip
+        luckyMatchIds.delete(mid);delete luckyPtsMap[mid];
+        sbDelete('settings','key=eq.lucky_pts_'+mid).catch(function(e){console.error(e);});
+        saveLuckyDip();
+      }
+    });
     deadmanHistory=[];
     (settR||[]).forEach(function(r){
       var m=r.key.match(/^deadman_history_(\d+)$/);
@@ -1506,9 +1528,9 @@ function saveLuckyDip(){
     sbUpsert('settings',{key:'lucky_match_id',value:idsStr,updated_at:new Date().toISOString()}),
     sbUpsert('settings',{key:'lucky_points',value:String(luckyPoints),updated_at:new Date().toISOString()})
   ];
-  // Save per-match pts
-  Object.keys(luckyPtsMap).forEach(function(mid){
-    calls.push(sbUpsert('settings',{key:'lucky_pts_'+mid,value:String(luckyPtsMap[mid]),updated_at:new Date().toISOString()}));
+  // Only save pts for ACTIVE lucky matches — not stale ones
+  luckyMatchIds.forEach(function(mid){
+    if(luckyPtsMap[mid])calls.push(sbUpsert('settings',{key:'lucky_pts_'+mid,value:String(luckyPtsMap[mid]),updated_at:new Date().toISOString()}));
   });
   Promise.all(calls).catch(function(e){console.error('saveLuckyDip:',e);});
 }
@@ -1524,8 +1546,9 @@ function saveDeadmanMatch(){
     sbUpsert('settings',{key:'deadman_match_id',value:idsStr,updated_at:new Date().toISOString()}),
     sbUpsert('settings',{key:'deadman_points',value:String(deadmanPoints),updated_at:new Date().toISOString()})
   ];
-  Object.keys(deadmanPtsMap).forEach(function(mid){
-    calls.push(sbUpsert('settings',{key:'deadman_pts_'+mid,value:String(deadmanPtsMap[mid]),updated_at:new Date().toISOString()}));
+  // Only save pts for ACTIVE deadman matches — not stale ones
+  deadmanMatchIds.forEach(function(mid){
+    if(deadmanPtsMap[mid])calls.push(sbUpsert('settings',{key:'deadman_pts_'+mid,value:String(deadmanPtsMap[mid]),updated_at:new Date().toISOString()}));
   });
   Promise.all(calls).catch(function(e){console.error('saveDeadmanMatch:',e);});
 }
@@ -2250,8 +2273,12 @@ function render(){
             sbUpsert('settings',{key:'lucky_history_'+mid,value:String(luckyPtsMap[mid]),updated_at:new Date().toISOString()}).catch(function(e){console.error(e);});
           }
         } else{
+          // Toggle OFF — clean up completely
           luckyMatchIds.delete(mid);
+          delete luckyPtsMap[mid];
           luckyMatchId=luckyMatchIds.size?[...luckyMatchIds][luckyMatchIds.size-1]:null;
+          // Delete per-match pts from Supabase so it doesn't ghost-reload
+          sbDelete('settings','key=eq.lucky_pts_'+mid).catch(function(e){console.error(e);});
         }
         card.style.borderColor=tIn.checked?'#c0392b':'';
         card.style.boxShadow=tIn.checked?'0 0 10px #c0392b44':'';
@@ -2379,8 +2406,12 @@ function render(){
             sbUpsert('settings',{key:'deadman_history_'+mid,value:String(deadmanPtsMap[mid]),updated_at:new Date().toISOString()}).catch(function(e){console.error(e);});
           }
         } else{
+          // Toggle OFF — clean up completely
           deadmanMatchIds.delete(mid);
+          delete deadmanPtsMap[mid];
           deadmanMatchId=deadmanMatchIds.size?[...deadmanMatchIds][deadmanMatchIds.size-1]:null;
+          // Delete per-match pts from Supabase so it doesn't ghost-reload
+          sbDelete('settings','key=eq.deadman_pts_'+mid).catch(function(e){console.error(e);});
         }
         card.style.borderColor=tIn.checked?'#7a2020':'';
         card.style.boxShadow=tIn.checked?'0 0 10px #dc262644':'';
