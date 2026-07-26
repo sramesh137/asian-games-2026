@@ -120,8 +120,9 @@ input[type=text],input[type=password]{background:#1a3a66;border:1px solid #24507
 .toggle input{opacity:0;width:0;height:0;position:absolute;}
 .toggle-slider{position:absolute;inset:0;background:#1a3a66;border-radius:24px;cursor:pointer;transition:.2s;}
 .toggle-slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#5a7a99;border-radius:50%;transition:.2s;}
-.toggle input:checked+.toggle-slider{background:#7a1a1a;}
-.toggle input:checked+.toggle-slider:before{transform:translateX(20px);background:#c0392b;}
+.toggle input:checked+.toggle-slider{background:#c0392b;}
+.toggle input:checked+.toggle-slider:before{transform:translateX(20px);background:#fff;}
+.toggle input:disabled+.toggle-slider{opacity:0.4;cursor:not-allowed;}
 #shareView{display:none;position:fixed;inset:0;background:#081428;z-index:500;overflow-y:auto;}
 #shareView.open{display:block;}
 .share-close{position:sticky;top:0;background:#081428;border-bottom:1px solid #1a3a66;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;z-index:10;}
