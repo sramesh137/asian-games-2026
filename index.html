@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WC2026</title>
+<title>AG2026</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#081428;color:#fff;min-height:100vh;}
@@ -173,7 +173,7 @@ body.share-mode #deployModal{display:none !important;}
   <div class="share-close" style="flex-direction:column;align-items:stretch;gap:8px;">
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <div>
-        <span style="font-weight:800;font-size:15px;">&#x26BD; WC 2026 &mdash; Live Stats</span>
+        <span style="font-weight:800;font-size:15px;">&#x26BD; AG 2026 Cricket &mdash; Live Stats</span>
         <div id="shareLastUpdated" style="font-size:10px;color:#5a7a99;margin-top:2px;"></div>
       </div>
       <button class="btn btn-gold share-refresh" style="padding:8px 16px;font-size:13px;font-weight:900;flex-shrink:0;" onclick="loadAll()">&#x1F504; Refresh</button>
@@ -215,7 +215,7 @@ body.share-mode #deployModal{display:none !important;}
 <!-- MAIN APP -->
 <div id="mainApp">
   <header>
-    <div><h1>&#x26BD; WC 2026 Admin</h1><div style="font-size:11px;color:#1a8c4e;margin-top:2px;" id="syncStatus">Connecting&hellip;</div></div>
+    <div><h1>&#x26BD; AG 2026 Cricket Admin</h1><div style="font-size:11px;color:#1a8c4e;margin-top:2px;" id="syncStatus">Connecting&hellip;</div></div>
     <div style="display:flex;gap:6px;align-items:center;">
       <button class="btn" style="padding:7px 10px;font-size:11px;" onclick="loadAll()">&#x1F504;</button>
       <button class="btn" style="padding:7px 10px;font-size:11px;" onclick="openShare()">&#x1F441; Stats</button>
@@ -363,10 +363,6 @@ let deadmanHistory=[];         // [{id, pts}] all past deadman matches with resu
 let deadmanPoints=3;           // default pts selector value
 let boldPickMatchIds=new Set(); // admin-flagged Bold Pick matches (knockout only, mutually exclusive with Lucky Dip/Deadman)
 let boldPickHistory=[];         // [{id}] — locked after result entered
-let bracketOpen=false;          // controlled by settings table
-let bracketResults={};          // {round_slot: winnerTeam}
-let bracketTeams={};            // {slot: {home,away}} for R32
-let selBracketPlayer=null;
 let autoRefreshTimer=null;
 let _statsCache={};
 let _prevLbRanks={};
@@ -494,12 +490,7 @@ async function loadAll(){
       var bhm=r.key.match(/^bold_pick_history_(\d+)$/);
       if(bhm)boldPickHistory.push({id:parseInt(bhm[1])});
     });
-    // Load R32 team names from settings
-    bracketTeams={};
-    (settR||[]).forEach(function(r){
-      var m=r.key.match(/^r32_(\d+)_(home|away)$/);
-      if(m){var sl=parseInt(m[1]),side=m[2];if(!bracketTeams[sl])bracketTeams[sl]={home:'TBD',away:'TBD'};bracketTeams[sl][side]=r.value;}
-    });
+
     clearStatsCache();
     // Auto-select current week: stay on a week until it's FULLY complete, then advance.
     // A week only counts as 'done' if every match in it has a result — a single
@@ -560,7 +551,7 @@ function getFunStats(week){
   function topBy(arr,key,minVal){var pool=arr.slice();if(minVal!==undefined)pool=pool.filter(function(p){return p[key]>=minVal;});if(!pool.length)return null;var max=-1;pool.forEach(function(p){if(p[key]>max)max=p[key];});if(max<=0)return null;var winners=pool.filter(function(p){return p[key]===max;});return{names:winners.map(function(p){return p.name;}),value:max};}
   var sharp=topBy(ranks.filter(function(p){return p.total>=2;}),'acc',0);
   var fire=topBy(ranks,'curStreak',1);
-  var maverick=topBy(ranks,'boldPicks',1);
+  var boldGuesser=topBy(ranks,'boldPicks',1);
   var active=topBy(ranks,'participation',0);
   var sheep=topBy(ranks,'consensusPct',1);
   var bestStreaker=topBy(ranks,'bestStreak',2);
@@ -627,7 +618,7 @@ function getFunStats(week){
   var luckyMiss=missMax>0?{names:Object.keys(luckyMissSet).filter(function(k){return luckyMissSet[k]===missMax;}),value:missMax}:null;
   // Underdog Bet HOF — best net bonus (King) and worst net bonus (Bust)
   var udNet={};
-  players.forEach(function(p){var b=getUnderdogBonus(p,week);if(b!==0)udNet[p]=b;});
+  // underdog calc removed for cricket
   var udMax=0;Object.keys(udNet).forEach(function(k){if(udNet[k]>udMax)udMax=udNet[k];});
   var underdogKing=udMax>0?{names:Object.keys(udNet).filter(function(k){return udNet[k]===udMax;}),value:udMax}:null;
   var udMin=0;Object.keys(udNet).forEach(function(k){if(udNet[k]<udMin)udMin=udNet[k];});
@@ -640,7 +631,7 @@ function getFunStats(week){
   var dmMin=0;Object.keys(dmNet).forEach(function(k){if(dmNet[k]<dmMin)dmMin=dmNet[k];});
   var deadmanCasualty=dmMin<0?{names:Object.keys(dmNet).filter(function(k){return dmNet[k]===dmMin;}),value:Math.abs(dmMin)}:null;
   var mostImproved=getMostImprovedAward();
-  return{sharp,fire,maverick,active,sheep,bestStreaker,bestLoser,upset,twins,ghost,drawKing,slowStarter,hatTrick,captain,cleanSheet,perfectAttend,streakKing,fighters,luckyStar,luckyMiss,underdogKing,underdogBust,mostImproved,deadmanSurvivor,deadmanCasualty,matchesDone:done.length};
+  return{sharp,fire,boldGuesser,active,sheep,bestStreaker,bestLoser,upset,twins,ghost,slowStarter,hatTrick,captain,cleanSheet,perfectAttend,streakKing,fighters,luckyStar,luckyMiss,mostImproved,deadmanSurvivor,deadmanCasualty,matchesDone:done.length};
 }
 // Most Improved — compares each player's accuracy in their most recent completed
 // week against their average accuracy across all PRIOR completed weeks. Needs at
@@ -718,17 +709,18 @@ function renderFunStats(targetId,week){
     cards+=award('🎯','Streak King',fs.streakKing,function(w){return w.value+' matches in a row played';},'#3a2a1a');
     cards+=award('🎩','Hat-Trick Hunter',fs.hatTrick,function(w){return w.value+' correct in a row';},'#3a1a5a');
     cards+=award('🎯','Sharpshooter',fs.sharp,function(w){return w.value+'% accuracy';},'#1a5c2e');
-    cards+=award('🦁','The Maverick',fs.maverick,function(w){return w.value+' bold pick'+(w.value>1?'s':'');},'#5a4a00');
-    cards+=award('🎰','Draw Whisperer',fs.drawKing,function(w){return w.value+' draw'+(w.value>1?'s':'')+' called';},'#0a3a3a');
+    cards+=award('🦁','The Bold Guesser',fs.boldGuesser,function(w){return w.value+' bold pick'+(w.value>1?'s':'');},'#5a4a00');
+    // Draw Whisperer removed for cricket (no draws in T20)
+    //cards+=award('🎰','Draw Whisperer',fs.drawKing,function(w){return w.value+' draw'+(w.value>1?'s':'')+' called';},'#0a3a3a');
     cards+=award('🤝','Twin Souls',fs.twins,function(w){return 'agreed '+w.value+' times';},'#1a2a4a');
     cards+=award('🐢','Slow Starter',fs.slowStarter,function(w){return 'no wins yet — keep going!';},'#2a3a1a');
     cards+=award('🥲','Heartbreak Kid',fs.bestLoser,function(w){return 'tried hard, tough luck';},'#4a1a2a');
     cards+=award('👻','The Ghost',fs.ghost,function(w){return 'only '+w.value+'% — come back!';},'#2a2a2a');
     cards+=award('🍀','Lucky Dip Star',fs.luckyStar,function(w){return 'hit lucky '+w.value+' time'+(w.value>1?'s':'')+'!';},'#0a3a1a');
     cards+=award('💔','Lucky Dip Miss',fs.luckyMiss,function(w){return 'missed lucky '+w.value+' time'+(w.value>1?'s':'')+'!';},'#3a0a0a');
-    cards+=award('🦅','Underdog King',fs.underdogKing,function(w){return 'net +'+w.value+' from underdog bets!';},'#3a1a5a');
+    // Underdog King removed for cricket
     cards+=award('📈','Most Improved',fs.mostImproved,function(w){return '+'+w.value+'% accuracy vs season average!';},'#0a4a3a');
-    cards+=award('🪦','Underdog Bust',fs.underdogBust,function(w){return 'net -'+w.value+' from underdog bets';},'#3a0a0a');
+    // Underdog Bust removed for cricket
     cards+=award('💀','Deadman Survivor',fs.deadmanSurvivor,function(w){return 'net +'+w.value+' from Deadman\'s Match!';},'#7a2020');
     cards+=award('⚰️','Deadman Casualty',fs.deadmanCasualty,function(w){return 'net -'+w.value+' from Deadman\'s Match';},'#3a0a0a');
     if(!cards){el.innerHTML='<div class="stat-card"><div class="stat-header">🏅 Hall of Fame</div><div style="padding:18px;text-align:center;color:#7a9bb5;font-size:12px;">Awards unlock as more matches finish 🔓</div></div>';}
@@ -771,37 +763,12 @@ async function setPick(mid,player,opt){const cur=predictions[mid]?.[player],newV
 // Maps a knockout match ID to its bracket round+slot. R32 matches map directly
 // by entry order (1st R32 match = slot 1, 2nd = slot 2, etc). Later rounds will
 // need their own mapping once those matches are added to MATCHES.
-function getBracketSlotForMatch(matchId){
-  var m=MATCHES.find(function(x){return x.id===matchId;});
-  if(!m||!m.round)return null;
-  var sameRoundMatches=MATCHES.filter(function(x){return x.round===m.round;});
-  var slot=sameRoundMatches.findIndex(function(x){return x.id===matchId;})+1;
-  if(slot<1)return null;
-  return{round:m.round,slot:slot};
-}
-// Returns the live team names for any match — for R32 this is from MATCHES directly
-// (auto-populated from MATCHES by getBracketTeams), for R16+ it resolves from
-// bracketResults so team names update automatically as each round completes.
-// This means MATCHES never needs manual team-name updates beyond R32.
+
+// Returns live team names for any match.
+// TBD teams remain TBD until admin updates the MATCHES fixture directly.
 function getMatchTeams(m){
   if(!m)return{home:'TBD',away:'TBD'};
-  // If MATCHES already has real team names (not TBD/❓), always trust them —
-  // this covers group stage, R32, and any knockout round where we've hardcoded
-  // the correct fixture. Only fall back to bracketResults auto-resolve when
-  // the MATCHES entry itself says TBD (i.e. future rounds not yet entered).
-  var hasTBD=!m.home||m.home.indexOf('TBD')!==-1||m.home.indexOf('❓')!==-1||
-              !m.away||m.away.indexOf('TBD')!==-1||m.away.indexOf('❓')!==-1;
-  if(!hasTBD){
-    return{home:m.home,away:m.away};
-  }
-  // One or both teams are TBD — try to resolve from bracket results
-  var slotInfo=getBracketSlotForMatch(m.id);
-  if(!slotInfo)return{home:m.home,away:m.away};
-  var teams=getBracketTeams(slotInfo.round,slotInfo.slot);
-  return{
-    home:(teams.home&&teams.home!=='TBD')?teams.home:m.home,
-    away:(teams.away&&teams.away!=='TBD')?teams.away:m.away
-  };
+  return{home:m.home,away:m.away};
 }
 async function setResult(mid,val){const newVal=results[mid]===val?null:val;results[mid]=newVal;clearStatsCache();
   // Auto-advance result card to show the date of this match
@@ -909,15 +876,7 @@ function getRivalries(week,mode='top5'){
   return{week,pairs:mode==='top5'?pairs.slice(0,5):mode==='all'?pairs.slice(0,10):pairs,summary,mode};
 }
 
-function getTop5Rivalry(week){return getRivalries(week,'top5');}
 
-function renderRivalryStats(targetId,week,mode='top5'){
-  const el=document.getElementById(targetId);if(!el)return;
-  const data=getRivalries(week,mode);
-  if(!data){const message=mode==='custom'?'Select two different players with shared predictions.':'No head-to-head data available yet';el.innerHTML='<div class="stat-card"><div class="stat-header">🏆 Rivalries</div><div style="padding:18px;text-align:center;color:#7a9bb5;font-size:12px;">'+message+'</div></div>';return;}
-  const rows=data.pairs.map(r=>'<div class="stat-row" style="display:grid;grid-template-columns:1.9fr 0.8fr;gap:10px;align-items:center;"><div><div style="font-weight:700;color:#fff;">'+r.pair+'</div><div style="font-size:11px;color:#7a9bb5;margin-top:4px;">'+r.totalShared+' shared match'+(r.totalShared!==1?'es':'')+' · both right '+r.bothRight+' · both wrong '+r.bothWrong+'</div></div><div style="text-align:right;color:'+(r.aScore>r.bScore?'#00c853':r.aScore<r.bScore?'#f97316':'#1a8c4e')+';font-weight:900;" title="Correct only when the other player missed">'+r.score+'</div></div>').join('');
-  el.innerHTML='<div class="stat-card"><div class="stat-header">🏆 '+data.summary+'</div>'+rows+'</div>';
-}
 
 function renderRivalryControls(targetId){
   const el=document.getElementById(targetId);if(!el)return;
@@ -938,7 +897,7 @@ function buildPlayerStatsHTML(player,gs,week){
   const st=getPlayerStats(player,week);const wins=st.wins,losses=st.losses,bestStreak=st.bestStreak,curStreak=st.curStreak,rows=st.rows;
   const pData=gs?gs.playerRanks.find(p=>p.name===player):null;
   const perfectDatesForPlayer=getPerfectDays(player,week).map(function(d){return d.date;});
-  const rowsHtml=rows.map(({m,pick,pickLabel,res,isWin,isLoss})=>{const hn=m.home.replace(/^\S+\s/,''),an=m.away.replace(/^\S+\s/,'');const resLabel=res==='home'?hn:res==='draw'?'Draw':an;const icon=isWin?'✅':isLoss?'❌':'—';const lh=luckyHistory.find(function(h){return h.id===m.id;});const isLucky=!!(lh||(luckyMatchIds&&luckyMatchIds.has(m.id)));const bpts=isLucky?(lh?lh.pts:luckyPoints):1;const dmh=deadmanHistory.find(function(h){return h.id===m.id;});const isDeadmanM=!!(dmh||(deadmanMatchIds&&deadmanMatchIds.has(m.id)));const dmpts=isDeadmanM?getDeadmanMatchPts(m.id):0;var ptsBadge='';if(isDeadmanM&&pick){ptsBadge='<span style="background:'+(isWin?'#dc2626':'#7a2020')+';color:#fff;font-size:9px;font-weight:900;padding:1px 5px;border-radius:6px;margin-left:4px;">💀'+(isWin?'+':'-')+dmpts+'pts</span>';}else if(isWin){ptsBadge=isLucky?'<span style="background:#1a8c4e;color:#000;font-size:9px;font-weight:900;padding:1px 5px;border-radius:6px;margin-left:4px;">🍀'+bpts+'pts</span>':'<span style="color:#00c853;font-size:10px;font-weight:700;margin-left:4px;">+1</span>';}var inBet=isInUnderdogBet(m.id,player);var udBadge=inBet?'<span style="background:'+(isWin?'#8b5cf6':'#dc2626')+';color:#fff;font-size:9px;font-weight:900;padding:1px 5px;border-radius:6px;margin-left:4px;">🦅'+(isWin?'+1':'-1')+'</span>':'';var dayMatchesHere=weekMatches(week||"all").filter(function(x){return x.date===m.date&&results[x.id];});var isLastOfDay=dayMatchesHere.length&&dayMatchesHere[dayMatchesHere.length-1].id===m.id;var pdBadge=(perfectDatesForPlayer.indexOf(m.date)!==-1&&isLastOfDay)?'<span style="background:#10b981;color:#fff;font-size:9px;font-weight:900;padding:1px 5px;border-radius:6px;margin-left:4px;">🎯+'+perfectDayPts(dayMatchesHere.length,isKnockoutMatch(m))+'</span>':'';return'<div class="stat-row"><span style="color:#7a9bb5;font-size:11px;flex:1;">'+icon+' M'+m.id+' '+hn+' vs '+an+'</span><div style="display:flex;gap:6px;align-items:center;flex-shrink:0;"><span class="stat-pick '+(pick||'none')+'" style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+pickLabel+'">'+pickLabel+'</span><span style="color:#5a7a99;font-size:10px;white-space:nowrap;">→ '+resLabel+'</span>'+ptsBadge+udBadge+pdBadge+'</div></div>';}).join('');
+  const rowsHtml=rows.map(({m,pick,pickLabel,res,isWin,isLoss})=>{const hn=m.home.replace(/^\S+\s/,''),an=m.away.replace(/^\S+\s/,'');const resLabel=res==='home'?hn:res==='draw'?'Draw':an;const icon=isWin?'✅':isLoss?'❌':'—';const lh=luckyHistory.find(function(h){return h.id===m.id;});const isLucky=!!(lh||(luckyMatchIds&&luckyMatchIds.has(m.id)));const bpts=isLucky?(lh?lh.pts:luckyPoints):1;const dmh=deadmanHistory.find(function(h){return h.id===m.id;});const isDeadmanM=!!(dmh||(deadmanMatchIds&&deadmanMatchIds.has(m.id)));const dmpts=isDeadmanM?getDeadmanMatchPts(m.id):0;var ptsBadge='';if(isDeadmanM&&pick){ptsBadge='<span style="background:'+(isWin?'#dc2626':'#7a2020')+';color:#fff;font-size:9px;font-weight:900;padding:1px 5px;border-radius:6px;margin-left:4px;">💀'+(isWin?'+':'-')+dmpts+'pts</span>';}else if(isWin){ptsBadge=isLucky?'<span style="background:#1a8c4e;color:#000;font-size:9px;font-weight:900;padding:1px 5px;border-radius:6px;margin-left:4px;">🍀'+bpts+'pts</span>':'<span style="color:#00c853;font-size:10px;font-weight:700;margin-left:4px;">+1</span>';}var inBet=false;var udBadge=inBet?'<span style="background:'+(isWin?'#8b5cf6':'#dc2626')+';color:#fff;font-size:9px;font-weight:900;padding:1px 5px;border-radius:6px;margin-left:4px;">🏏'+(isWin?'+1':'-1')+'</span>':'';var dayMatchesHere=weekMatches(week||"all").filter(function(x){return x.date===m.date&&results[x.id];});var isLastOfDay=dayMatchesHere.length&&dayMatchesHere[dayMatchesHere.length-1].id===m.id;var pdBadge=(perfectDatesForPlayer.indexOf(m.date)!==-1&&isLastOfDay)?'<span style="background:#10b981;color:#fff;font-size:9px;font-weight:900;padding:1px 5px;border-radius:6px;margin-left:4px;">🎯+'+perfectDayPts(dayMatchesHere.length,isKnockoutMatch(m))+'</span>':'';return'<div class="stat-row"><span style="color:#7a9bb5;font-size:11px;flex:1;">'+icon+' M'+m.id+' '+hn+' vs '+an+'</span><div style="display:flex;gap:6px;align-items:center;flex-shrink:0;"><span class="stat-pick '+(pick||'none')+'" style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+pickLabel+'">'+pickLabel+'</span><span style="color:#5a7a99;font-size:10px;white-space:nowrap;">→ '+resLabel+'</span>'+ptsBadge+udBadge+pdBadge+'</div></div>';}).join('');
   return'<div class="summary-grid" style="grid-template-columns:1fr 1fr 1fr;">'
     +'<div class="summary-box"><div class="val" style="color:#00c853">'+wins+'</div><div class="lbl">✅ Correct</div></div>'
     +'<div class="summary-box"><div class="val" style="color:#e74c3c">'+losses+'</div><div class="lbl">❌ Wrong</div></div>'
@@ -975,8 +934,8 @@ function copyStats(){
     const dmPts=isDeadmanM?getDeadmanMatchPts(m.id):0;
     const pts=isDeadmanM?'':(isWin?(isLucky?(lh?lh.pts:luckyPoints):1):'');
     // Underdog bet badge
-    const inBet=isInUnderdogBet(m.id,p);
-    const underdogStr=inBet?(isWin?' 🦅+1':' 🦅-1'):'';
+    const inBet=false;
+    const underdogStr='';
     // Perfect Day badge — only tag the LAST match of a perfect day, to avoid repeating it on every line
     const dayMatchesForThis=weekMatches(selWeek||"all").filter(function(x){return x.date===m.date&&results[x.id];});
     const isLastOfPerfectDay=perfectDatesThisPeriod.indexOf(m.date)!==-1&&dayMatchesForThis[dayMatchesForThis.length-1].id===m.id;
@@ -985,8 +944,7 @@ function copyStats(){
     const ptsStr=(pts?(pts>1?'🍀'+pts+'pts':'1pt'):(inBet&&!isWin?'0pt':''))+underdogStr+perfectDayStr+deadmanStr;
     return(isWin?'✅':status==='LOSS'?'❌':'—')+' '+pad('M'+m.id+' '+hn+' v '+an,28)+pad(pickLabel,12)+pad(resLabel,10)+ptsStr;
   }).join('\n');
-  var underdogTotal=getUnderdogBonus(p,selWeek);
-  var underdogLine=underdogTotal!==0?('\n🦅 Underdog bets: '+(underdogTotal>0?'+':'')+underdogTotal+'pts'):'';
+  var underdogLine=''; // underdog bets removed for cricket
   var perfectDayTotal=getPerfectDayBonus(p,selWeek);
   var perfectDayLine=perfectDayTotal>0?('\n🎯 Perfect Day bonus: +'+perfectDayTotal+'pts'):'';
   var deadmanTotal=getDeadmanBonus(p,selWeek);
@@ -1051,7 +1009,7 @@ function buildResultCardHTML(week){
       const pick=predictions[m.id]?.[p];
       if(!pick)return'<td style="text-align:center;padding:4px 2px;"><span style="color:#3a5070;font-size:13px;font-weight:700;">·</span></td>';
       const win=pick===res;
-      var inBet=isInUnderdogBet(m.id,p);
+      var inBet=false;
       var bonusBorder=isDeadmanRow?(win?'#dc2626':'#7a2020'):(isLuckyMatch&&win?'#1a8c4e':(inBet&&win)?'#8b5cf6':(inBet&&!win)?'#dc2626':win?'#1a8f4a':'#7a2020');
       var bonusLabel=isDeadmanRow?'<div style="font-size:8px;color:'+(win?'#ff6b6b':'#ff6b6b')+';font-weight:900;line-height:1.2;">'+(win?'+':'-')+dmRowPts+'</div>'
         :isLuckyMatch&&win?'<div style="font-size:8px;color:#1a8c4e;font-weight:900;line-height:1.2;">+'+bonusPts+'</div>'
@@ -1225,7 +1183,7 @@ function copyResultCard(targetId,week){
       if(isLuckyM&&predictions[m.id]?.[p]===res){
         return '['+p+' 🍀+'+lkPts+']';
       }
-      return isInUnderdogBet(m.id,p)?'['+p+' 🦅'+(predictions[m.id]?.[p]===res?'+1':'-1')+']':p;
+      return p;
     }
     const winners=players.filter(p=>{const pk=predictions[m.id]?.[p];return pk&&pk===res;}).map(withTag);
     const losers=players.filter(p=>{const pk=predictions[m.id]?.[p];return pk&&pk!==res;}).map(withTag);
@@ -1266,7 +1224,7 @@ function copyResultCard(targetId,week){
           pts+=(isCorrect?lkp:0);
           if(isCorrect)wins++;
         }
-      } else if(isInUnderdogBet(m.id,p)){
+      } else if(false){ // underdog removed
         if(pk){pts+=(isCorrect?1:0);if(isCorrect)wins++;}
         bonus+=(isCorrect?1:(isWrong?-1:0));
       } else {
@@ -1277,7 +1235,7 @@ function copyResultCard(targetId,week){
     return{name:p,wins,tot,bonus,pts};
   }).filter(p=>p.tot>0).sort((a,b)=>b.pts-a.pts||a.name.localeCompare(b.name));
   const scoreLines=daySummary.map((p,i)=>{
-    const bonusStr=p.bonus!==0?' ('+p.wins+'/'+p.tot+(p.bonus>0?'+':'')+p.bonus+'🦅)':' '+p.wins+'/'+p.tot;
+    const bonusStr=p.bonus!==0?' ('+p.wins+'/'+p.tot+(p.bonus>0?'+':'')+p.bonus+'🏏)':' '+p.wins+'/'+p.tot;
     return(i===0?'🥇':i===1?'🥈':i===2?'🥉':'➖')+' '+p.name+' '+p.pts+'pts'+bonusStr;
   }).join('\n');
   // Perfect Day callout — anyone who swept every match this day gets a shoutout
@@ -1388,51 +1346,12 @@ function renderH2H(targetId,week){
 
 
 
-// ── Underdog Bet ─────────────────────────────────────────────
-// A side with 1 or 2 votes (and not the only side picked) is an "underdog side".
-// A side with 3+ votes never qualifies. Need 2+ sides picked for any bet to apply.
-// Only applies from this match ID onward — change this when announcing the feature
-// so it never retroactively rescores matches that already happened.
-var UNDERDOG_START_MATCH_ID=21;
-var UNDERDOG_MIN_VOTERS=5; // total voters on the match must be at least this many
-function getUnderdogSides(matchId){
-  if(matchId<UNDERDOG_START_MATCH_ID)return [];
-  var m=MATCHES.find(function(x){return x.id===matchId;});
-  if(isKnockoutMatch(m))return []; // group-stage only — knockouts use round-scaled win/loss instead
-  var counts={home:0,draw:0,away:0}; // draw always 0 in cricket
-  players.forEach(function(p){
-    var pk=predictions[matchId]?.[p];
-    if(pk&&counts.hasOwnProperty(pk))counts[pk]++;
-  });
-  var sidesPicked=Object.keys(counts).filter(function(s){return counts[s]>0;});
-  if(sidesPicked.length<2)return []; // need at least 2 sides picked for a bet to exist
-  var totalVoters=counts.home+counts.draw+counts.away;
-  if(totalVoters<UNDERDOG_MIN_VOTERS)return []; // too few participants for a meaningful bet
-  // Only the side(s) with the STRICTLY LOWEST vote count among picked sides qualify —
-  // not every side with 1-2 votes. E.g. a 2-1-2 split means only the lone '1' side is
-  // the real underdog; the two '2' sides are equal to each other and don't qualify.
-  // A genuine tie at the lowest count (e.g. 2-2-0) means both of those sides qualify,
-  // since neither is more 'popular' than the other.
-  var minCount=Math.min.apply(null,sidesPicked.map(function(s){return counts[s];}));
-  if(minCount>2)return []; // even the least-picked side has 3+ votes — not an underdog scenario
-  return sidesPicked.filter(function(s){return counts[s]===minCount;});
-}
-function isInUnderdogBet(matchId,player){
-  var pick=predictions[matchId]?.[player];
-  if(!pick)return false;
-  var underdogSides=getUnderdogSides(matchId);
-  return underdogSides.indexOf(pick)!==-1;
-}
-function getUnderdogBonus(player,week){
-  var bonus=0;
-  weekMatches(week||"all").forEach(function(m){
-    if(!results[m.id])return;
-    if(!isInUnderdogBet(m.id,player))return;
-    var pick=predictions[m.id]?.[player];
-    bonus+=(pick===results[m.id])?1:-1;
-  });
-  return bonus;
-}
+
+
+// var UNDERDOG_MIN_VOTERS removed — underdog bet not used in cricket
+
+
+
 // ── Perfect Day Bonus ────────────────────────────────────────
 // If a player correctly predicts EVERY match on a matchday, they earn a scaling
 // bonus. Group-stage days need 3+ matches (bonus = matchCount-2: 3=+1, 4=+2...).
@@ -1448,12 +1367,7 @@ function perfectDayPts(matchCount,isKnockoutDay){
   if(isKnockoutDay)return Math.max(1,raw);
   return Math.max(0,raw);
 }
-function isPerfectDayEligible(date){
-  var startIdx=MATCHES.findIndex(function(m){return m.date===PERFECT_DAY_START_DATE;});
-  var dateIdx=MATCHES.findIndex(function(m){return m.date===date;});
-  if(startIdx===-1||dateIdx===-1)return date>=PERFECT_DAY_START_DATE;
-  return dateIdx>=startIdx;
-}
+
 function getPerfectDays(player,week){
   var done=weekMatches(week||"all").filter(function(m){return results[m.id];});
   var dates=[];
@@ -1616,7 +1530,7 @@ function getLuckyPoints(player,week){
   });
   base+=getDeadmanPointsDelta(player,week);
   base+=getBoldPickPointsDelta(player,week);
-  base+=getUnderdogBonus(player,week);
+  // base+=getUnderdogBonus removed for cricket
   base+=getPerfectDayBonus(player,week);
   return base;
 }
@@ -1683,6 +1597,15 @@ const KNOCKOUT_ROUND_PTS={
   bronze:{win:12,loss:-6},  // Bronze medal match
   gold:{win:16,loss:-8}     // Gold medal match 🥇
 };
+// ── Stubs for removed football features ────────────────────────
+function isPerfectDayEligible(){return false;} // disabled in cricket
+// Underdog Bet removed — cricket has no underdog bet concept
+function isInUnderdogBet(){return false;}
+function getUnderdogBonus(){return 0;}
+function getUnderdogSides(){return null;}
+var UNDERDOG_MIN_VOTERS=99; // effectively disabled
+var UNDERDOG_START='9999-01-01'; // never starts
+
 function isKnockoutMatch(m){
   // Prelim is group-stage-like (flat +1/0, no penalty for wrong)
   // QF/SF/Bronze/Gold are true knockout rounds with scaled points
@@ -1699,193 +1622,7 @@ const BRACKET_ROUNDS=[
 
 function bracketKey(round,slot){return round+'_'+slot;}
 
-// Get the two teams for a given round/slot
-// r32: admin-set teams; later rounds: winners of previous round's pairs
-function getR32MatchForSlot(slot){
-  // R32 matches map to slots in the same order they appear in MATCHES (1st R32
-  // match = slot 1, 2nd = slot 2, etc) — same ordering used by getBracketSlotForMatch.
-  var r32Matches=MATCHES.filter(function(m){return m.round==='r32';});
-  return r32Matches[slot-1]||null;
-}
-function getBracketTeams(round,slot){
-  var ri=BRACKET_ROUNDS.findIndex(function(r){return r.id===round;});
-  if(ri===0){
-    // R32: auto-pull from MATCHES (already has team names + flags) — no manual entry needed.
-    var m=getR32MatchForSlot(slot);
-    if(m)return{home:m.home,away:m.away};
-    return bracketTeams[slot]||{home:'TBD',away:'TBD'};
-  }
-  if(ri===1){
-    // R16: the official FIFA bracket pairs R32 winners in a NON-sequential order.
-    // Hardcode the actual pairings [r32_home_slot, r32_away_slot] per r16 slot,
-    // derived from the official FIFA bracket structure confirmed at:
-    // https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/articles/knockout-stage-match-schedule-bracket
-    var R16_PAIRINGS=[
-      [2,5],  // M89: Winner R32 slot 2 (Paraguay) vs Winner R32 slot 5 (France)
-      [1,3],  // M90: Winner R32 slot 1 (Canada)   vs Winner R32 slot 3 (Morocco)
-      [4,6],  // M91: Winner R32 slot 4 (Brazil)   vs Winner R32 slot 6 (Norway)
-      [7,8],  // M92: Winner R32 slot 7 (Mexico)   vs Winner R32 slot 8 (England)
-      [11,12],// M93: Winner R32 slot 11 (Portugal) vs Winner R32 slot 12 (Spain)
-      [9,10], // M94: Winner R32 slot 9 (USA)       vs Winner R32 slot 10 (Belgium)
-      [14,16],// M95: Winner R32 slot 14 (Argentina) vs Winner R32 slot 16 (Egypt)
-      [13,15] // M96: Winner R32 slot 13 (Switzerland) vs Winner R32 slot 15 (Colombia)
-    ];
-    var pair=R16_PAIRINGS[slot-1];
-    if(!pair)return{home:'TBD',away:'TBD'};
-    var home=bracketResults[bracketKey('r32',pair[0])]||'TBD';
-    var away=bracketResults[bracketKey('r32',pair[1])]||'TBD';
-    return{home:home,away:away};
-  }
-  if(ri===2){
-    // QF: official FIFA bracket pairings from R16 winners (non-sequential)
-    var QF_PAIRINGS=[
-      [1,2],  // QF slot 1: Winner R16 slot 1 (France) vs Winner R16 slot 2 (Morocco) → M97
-      [5,6],  // QF slot 2: Winner R16 slot 5 (Spain) vs Winner R16 slot 6 (Belgium) → M98
-      [3,4],  // QF slot 3: Winner R16 slot 3 (Norway) vs Winner R16 slot 4 (England) → M99
-      [7,8],  // QF slot 4: Winner R16 slot 7 (Argentina) vs Winner R16 slot 8 (Switzerland) → M100
-    ];
-    var qfPair=QF_PAIRINGS[slot-1];
-    if(!qfPair)return{home:'TBD',away:'TBD'};
-    var home=bracketResults[bracketKey('r16',qfPair[0])]||'TBD';
-    var away=bracketResults[bracketKey('r16',qfPair[1])]||'TBD';
-    return{home:home,away:away};
-  }
-  // SF/Final: winners of previous round pairs advance sequentially
-  var prevRound=BRACKET_ROUNDS[ri-1].id;
-  var homeSlot=slot*2-1,awaySlot=slot*2;
-  var home=bracketResults[bracketKey(prevRound,homeSlot)]||'TBD';
-  var away=bracketResults[bracketKey(prevRound,awaySlot)]||'TBD';
-  return{home:home,away:away};
-}
-
-async function saveBracketResult(round,slot,winner){
-  var key=bracketKey(round,slot);
-  if(bracketResults[key]===winner){
-    // Toggle off
-    delete bracketResults[key];
-    try{await sbDelete('bracket_results','round=eq.'+round+'&slot=eq.'+slot);}catch(e){console.error(e);}
-  } else {
-    bracketResults[key]=winner;
-    try{await sbUpsert('bracket_results',{round:round,slot:slot,winner:winner,updated_at:new Date().toISOString()});}catch(e){toast('❌ Save failed');console.error(e);}
-  }
-}
-
-async function saveBracketTeam(slot,side,team){
-  if(!bracketTeams[slot])bracketTeams[slot]={home:'TBD',away:'TBD'};
-  bracketTeams[slot][side]=team;
-  // Store as a setting: r32_slot_home / r32_slot_away
-  var key='r32_'+slot+'_'+side;
-  try{
-    await sbUpsert('settings',{key:key,value:team,updated_at:new Date().toISOString()});
-  }catch(e){toast('❌ Save failed');console.error(e);}
-}
-
-function renderBracket(targetId, isAdmin){
-  var el=document.getElementById(targetId);if(!el)return;
-
-  var hasKnockoutMatches=MATCHES.some(function(m){return m.round;});
-  if(!hasKnockoutMatches&&!isAdmin){
-    el.innerHTML='<div class="stat-card"><div class="stat-header" style="background:#2a1a4a;color:#a78bfa;">🏆 Knockout Bracket</div>'
-      +'<div style="padding:24px;text-align:center;color:#7a9bb5;font-size:13px;">Bracket opens after group stage 🔒</div></div>';
-    return;
-  }
-
-  var wrap=document.createElement('div');
-
-  // Bracket grid — visual tracker only: shows who's advancing as admin enters results.
-  // No player picks, no scoring — just a live view of the knockout path.
-  var bracketDiv=document.createElement('div');
-  bracketDiv.className='stat-card';
-  bracketDiv.style.borderColor='#7c3aed44';
-  var header=document.createElement('div');
-  header.className='stat-header';
-  header.style.background='#2a1a4a';
-  header.style.color='#a78bfa';
-  header.innerHTML='<span>🏆 Knockout Bracket</span><span style="font-size:10px;color:#b8a8d8;font-weight:400;">live tracker — who\'s still in it</span>';
-  bracketDiv.appendChild(header);
-
-  var bWrap=document.createElement('div');
-  bWrap.className='bracket-wrap';
-  var grid=document.createElement('div');
-  grid.className='bracket-grid';
-
-  BRACKET_ROUNDS.forEach(function(rnd){
-    var col=document.createElement('div');
-    col.className='bracket-round';
-    var title=document.createElement('div');
-    title.className='bracket-round-title';
-    title.textContent=rnd.label;
-    title.style.color=rnd.color;
-    col.appendChild(title);
-
-    var slots=document.createElement('div');
-    slots.className='bracket-slots';
-
-    for(var s=1;s<=rnd.slots;s++){
-      var teams=getBracketTeams(rnd.id,s);
-      var key=bracketKey(rnd.id,s);
-      var actualWinner=bracketResults[key];
-
-      var matchDiv=document.createElement('div');
-      matchDiv.className='bracket-match'+(actualWinner?' locked':'');
-      matchDiv.style.borderColor=rnd.color+'66';
-      if(actualWinner){matchDiv.style.boxShadow='0 0 6px '+rnd.color+'44';}
-
-      [teams.home,teams.away].forEach(function(team){
-        var teamDiv=document.createElement('div');
-        var isTBD=team==='TBD'||!team;
-        teamDiv.className='bracket-team'
-          +(isTBD?' tbd':'')
-          +(actualWinner===team?' winner':'')
-          +(actualWinner&&actualWinner!==team?' eliminated':'');
-        if(actualWinner===team){teamDiv.style.color=rnd.color;teamDiv.style.background=rnd.color+'22;';}
-
-        var nameSpan=document.createElement('span');
-        nameSpan.style.flex='1';
-        nameSpan.textContent=team||'TBD';
-        teamDiv.appendChild(nameSpan);
-
-        // Admin: click to mark the actual winner — advances them to the next round
-        if(isAdmin&&!isTBD){
-          (function(t,r,sl){teamDiv.onclick=function(){saveBracketResult(r,sl,t);};})(team,rnd.id,s);
-        }
-
-        matchDiv.appendChild(teamDiv);
-      });
-
-      // Admin R32: manual entry is now only a FALLBACK — if this slot already has
-      // a matching MATCHES entry, teams are auto-populated (with flags) and no
-      // manual input is needed at all.
-      if(isAdmin&&rnd.id==='r32'&&!actualWinner&&!getR32MatchForSlot(s)){
-        var editDiv=document.createElement('div');
-        editDiv.style.cssText='padding:4px 6px;background:#081428;display:flex;gap:4px;';
-        ['home','away'].forEach(function(side){
-          var inp=document.createElement('input');
-          inp.type='text';
-          inp.placeholder=side==='home'?'Home team':'Away team';
-          inp.value=(bracketTeams[s]||{})[side]||'';
-          inp.style.cssText='flex:1;padding:3px 6px;font-size:10px;background:#1a3a66;border:1px solid #24507e;border-radius:4px;color:#fff;';
-          (function(sl,sd,input){
-            input.onchange=function(){saveBracketTeam(sl,sd,input.value.trim());};
-          })(s,side,inp);
-          editDiv.appendChild(inp);
-        });
-        matchDiv.appendChild(editDiv);
-      }
-
-      slots.appendChild(matchDiv);
-    }
-    col.appendChild(slots);
-    grid.appendChild(col);
-  });
-
-  bWrap.appendChild(grid);
-  bracketDiv.appendChild(bWrap);
-  wrap.appendChild(bracketDiv);
-
-  el.innerHTML='';
-  el.appendChild(wrap);
-}
+// Get the two teams for a given round/slot (from MATCHES directly)
 
 
 
@@ -1948,7 +1685,7 @@ function buildAnnouncementText(week){
   if(fs){
     var highlight=null;
     if(fs.luckyStar&&fs.luckyStar.names.length)highlight='🍀 '+fs.luckyStar.names.join(' & ')+' hit the Lucky Dip!';
-    else if(fs.underdogKing&&fs.underdogKing.names.length)highlight='🦅 '+fs.underdogKing.names.join(' & ')+' nailed the Underdog Bet!';
+
     else if(fs.hatTrick&&fs.hatTrick.names.length)highlight='🎩 '+fs.hatTrick.names.join(' & ')+' on a hot streak!';
     if(highlight)msg+='\n'+highlight+'\n';
   }
@@ -1966,7 +1703,7 @@ function buildAwardsCeremonyText(){
   const fs=getFunStats("all");
   const topPts=lb[0].pts;
   const champs=lb.filter(function(e){return e.pts===topPts;}).map(function(e){return e.name;});
-  let msg=(allDone?'🏆 *WC 2026 — TOURNAMENT AWARDS* 🏆':'🏆 *WC 2026 — AWARDS SO FAR* 🏆')+'\n';
+  let msg=(allDone?'🏆 *AG 2026 Cricket — TOURNAMENT AWARDS* 🏆':'🏆 *AG 2026 Cricket — AWARDS SO FAR* 🏆')+'\n';
   msg+=(allDone?'_The season is complete — here\'s how it played out!_':'_Season still in progress — current standouts:_')+'\n\n';
   msg+='👑 *Champion'+(champs.length>1?'s':'')+'*\n'+champs.join(' & ')+' — '+topPts+'pts\n\n';
   const top3=lb.slice(0,3);
@@ -1982,14 +1719,14 @@ function buildAwardsCeremonyText(){
     if(fs.cleanSheet)awards.push({icon:'🛡️',title:'Clean Sheet Master',names:fs.cleanSheet.names,detail:fs.cleanSheet.value+' perfect matchday'+(fs.cleanSheet.value>1?'s':'')});
     if(fs.perfectAttend)awards.push({icon:'🎖️',title:'Perfect Attendance',names:fs.perfectAttend.names,detail:'never missed a pick'});
     if(fs.streakKing)awards.push({icon:'🔥',title:'Iron Streak',names:fs.streakKing.names,detail:fs.streakKing.value+' matches in a row played'});
-    if(fs.maverick)awards.push({icon:'🦁',title:'The Maverick',names:fs.maverick.names,detail:fs.maverick.value+' bold pick'+(fs.maverick.value>1?'s':'')});
-    if(fs.underdogKing)awards.push({icon:'🦅',title:'Underdog King',names:fs.underdogKing.names,detail:'net +'+fs.underdogKing.value+' from bets'});
+    if(fs.boldGuesser)awards.push({icon:'🦁',title:'The Bold Guesser',names:fs.boldGuesser.names,detail:fs.boldGuesser.value+' bold pick'+(fs.boldGuesser.value>1?'s':'')});
+
     if(fs.mostImproved)awards.push({icon:'📈',title:'Most Improved',names:fs.mostImproved.names,detail:'+'+fs.mostImproved.value+'% accuracy vs season average'});
     if(fs.deadmanSurvivor)awards.push({icon:'💀',title:'Deadman Survivor',names:fs.deadmanSurvivor.names,detail:'net +'+fs.deadmanSurvivor.value+' from Deadman\'s Match'});
     if(fs.luckyStar)awards.push({icon:'🍀',title:'Lucky Dip Star',names:fs.luckyStar.names,detail:'hit lucky '+fs.luckyStar.value+' time'+(fs.luckyStar.value>1?'s':'')});
-    if(fs.drawKing)awards.push({icon:'🎰',title:'Draw Whisperer',names:fs.drawKing.names,detail:fs.drawKing.value+' draw'+(fs.drawKing.value>1?'s':'')+' called'});
+    // Draw Whisperer removed (no draws in cricket T20)
     if(fs.twins)awards.push({icon:'🤝',title:'Twin Souls',names:fs.twins.names,detail:'agreed '+fs.twins.value+' times'});
-    if(fs.underdogBust)awards.push({icon:'🪦',title:'Underdog Bust',names:fs.underdogBust.names,detail:'net -'+fs.underdogBust.value+' from bets'});
+
     if(fs.deadmanCasualty)awards.push({icon:'⚰️',title:'Deadman Casualty',names:fs.deadmanCasualty.names,detail:'net -'+fs.deadmanCasualty.value+' from Deadman\'s Match'});
     if(fs.luckyMiss)awards.push({icon:'💔',title:'Lucky Dip Miss',names:fs.luckyMiss.names,detail:'missed lucky '+fs.luckyMiss.value+' time'+(fs.luckyMiss.value>1?'s':'')});
     if(fs.ghost)awards.push({icon:'👻',title:'The Ghost',names:fs.ghost.names,detail:'only '+fs.ghost.value+'% participation'});
@@ -2129,7 +1866,7 @@ function renderShare(){
 
   if(gs&&gs.playerRanks.length){
     const maxScore=gs.playerRanks[0].score||1;
-const rows=gs.playerRanks.map(function(p,i){var barColor=i===0?'#1a8c4e':i===1?'#cbd5e1':i===2?'#cd7f32':'#3b82f6';var allL=[...luckyHistory];luckyMatchIds.forEach(function(mid){if(!allL.find(function(h){return h.id===mid;}))allL.push({id:mid,pts:luckyPtsMap[mid]||luckyPoints});});var luckyTotal=0;allL.forEach(function(h){var lm=MATCHES.find(function(x){return x.id===h.id;});if(lm&&results[lm.id]&&predictions[lm.id]?.[p.name]===results[lm.id])luckyTotal+=h.pts;});var luckyBadge=luckyTotal>0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;">🍀'+luckyTotal+'pts</span>':'';var udTotal=getUnderdogBonus(p.name,selShareWeek);var udBadge=udTotal!==0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;background:'+(udTotal>0?'#8b5cf6':'#dc2626')+';color:#fff;">🦅'+(udTotal>0?'+':'')+udTotal+'pts</span>':'';var pdTotal=getPerfectDayBonus(p.name,selShareWeek);var pdBadge=pdTotal>0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;background:#10b981;color:#fff;">🎯+'+pdTotal+'pts</span>':'';var dmTotal=getDeadmanBonus(p.name,selShareWeek);var dmBadgeR=dmTotal!==0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;background:'+(dmTotal>0?'#dc2626':'#7a2020')+';color:#fff;">💀'+(dmTotal>0?'+':'')+dmTotal+'pts</span>':'';return'<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #16315a;">'+playerAvatar(p.name,38)+'<div style="flex:1;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="font-weight:800;font-size:13px;">'+p.name+'</span>'+luckyBadge+udBadge+pdBadge+dmBadgeR+'</div><div style="display:flex;gap:10px;font-size:10px;color:#7a9bb5;flex-wrap:wrap;"><span>✅ '+p.wins+' wins</span><span>🎯 '+p.acc+'%</span><span>📊 '+p.participation+'%</span>'+(p.curStreak>=2?'<span style="color:#f97316;">🔥'+p.curStreak+'</span>':'')+(p.boldPicks?'<span style="color:#a78bfa;">🦁'+p.boldPicks+'</span>':'')+'</div><div class="progress-bar" style="margin-top:5px;"><div class="progress-fill" style="width:'+Math.max(4,Math.round(p.score/maxScore*100))+'%;background:'+barColor+';"></div></div></div><div style="text-align:center;position:relative;width:48px;flex-shrink:0;">'+accuracyRing(p.acc,48,barColor)+'<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:9px;color:#1a8c4e;font-weight:800;">'+p.acc+'%</div></div></div>';}).join(''); document.getElementById("shareGroupStats").innerHTML='<div class="stat-card"><div class="stat-header">🎯 '+wkLabelTxt+' Rankings</div>'+rows+'</div>';
+const rows=gs.playerRanks.map(function(p,i){var barColor=i===0?'#1a8c4e':i===1?'#cbd5e1':i===2?'#cd7f32':'#3b82f6';var allL=[...luckyHistory];luckyMatchIds.forEach(function(mid){if(!allL.find(function(h){return h.id===mid;}))allL.push({id:mid,pts:luckyPtsMap[mid]||luckyPoints});});var luckyTotal=0;allL.forEach(function(h){var lm=MATCHES.find(function(x){return x.id===h.id;});if(lm&&results[lm.id]&&predictions[lm.id]?.[p.name]===results[lm.id])luckyTotal+=h.pts;});var luckyBadge=luckyTotal>0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;">🍀'+luckyTotal+'pts</span>':'';var udTotal=getUnderdogBonus(p.name,selShareWeek);var udBadge=udTotal!==0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;background:'+(udTotal>0?'#8b5cf6':'#dc2626')+';color:#fff;">🏏'+(udTotal>0?'+':'')+udTotal+'pts</span>':'';var pdTotal=getPerfectDayBonus(p.name,selShareWeek);var pdBadge=pdTotal>0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;background:#10b981;color:#fff;">🎯+'+pdTotal+'pts</span>':'';var dmTotal=getDeadmanBonus(p.name,selShareWeek);var dmBadgeR=dmTotal!==0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;background:'+(dmTotal>0?'#dc2626':'#7a2020')+';color:#fff;">💀'+(dmTotal>0?'+':'')+dmTotal+'pts</span>':'';return'<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #16315a;">'+playerAvatar(p.name,38)+'<div style="flex:1;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="font-weight:800;font-size:13px;">'+p.name+'</span>'+luckyBadge+udBadge+pdBadge+dmBadgeR+'</div><div style="display:flex;gap:10px;font-size:10px;color:#7a9bb5;flex-wrap:wrap;"><span>✅ '+p.wins+' wins</span><span>🎯 '+p.acc+'%</span><span>📊 '+p.participation+'%</span>'+(p.curStreak>=2?'<span style="color:#f97316;">🔥'+p.curStreak+'</span>':'')+(p.boldPicks?'<span style="color:#a78bfa;">🦁'+p.boldPicks+'</span>':'')+'</div><div class="progress-bar" style="margin-top:5px;"><div class="progress-fill" style="width:'+Math.max(4,Math.round(p.score/maxScore*100))+'%;background:'+barColor+';"></div></div></div><div style="text-align:center;position:relative;width:48px;flex-shrink:0;">'+accuracyRing(p.acc,48,barColor)+'<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:9px;color:#1a8c4e;font-weight:800;">'+p.acc+'%</div></div></div>';}).join(''); document.getElementById("shareGroupStats").innerHTML='<div class="stat-card"><div class="stat-header">🎯 '+wkLabelTxt+' Rankings</div>'+rows+'</div>';
 
   } else {
     document.getElementById("shareGroupStats").innerHTML='<div style="background:#0e2240;border-radius:12px;padding:16px;text-align:center;color:#7a9bb5;font-size:12px;margin-bottom:12px;">No results for '+wkLabelTxt+' yet</div>';
@@ -2162,83 +1899,7 @@ function toggleShareSection(bodyId,btnId,arrowId){
   if(arrow)arrow.textContent=open?"▲":"▼";
   if(btn)btn.style.borderRadius=open?"12px 12px 0 0":"12px";
 }
-function toggleDetailedAnalysis(){
-  var body=document.getElementById("shareDetailedBody");
-  var arrow=document.getElementById("detailedArrow");
-  var btn=document.getElementById("shareDetailedToggle");
-  if(!body)return;
-  var open=body.style.display==="none";
-  body.style.display=open?"block":"none";
-  arrow.textContent=open?"▲":"▼";
-  btn.style.borderRadius=open?"12px 12px 0 0":"12px";
-  if(open){
-    // Lazy render on first open
-    renderSharePlayerOnly();
-  }
-}
-function renderSharePlayerOnly(){
-  const gs=getGroupStats(selShareWeek);
-  // Refresh H2H dropdown
-  (function(){var sel=document.getElementById('shareH2HPlayer');if(!sel)return;
-    sel.innerHTML=players.map(function(p){return'<option value="'+p+'"'+(selSharePlayer===p?' selected':'')+'>'+p+'</option>';}).join('');})();
-  // Refresh chips
-  (function(){
-    var chips=document.getElementById('sharePlayerChips');
-    if(!chips)return;
-    chips.innerHTML='<span style="font-size:12px;font-weight:700;color:#1a8c4e;vertical-align:middle;margin-right:8px;">\u{1F4CA}</span>';
-    players.forEach(function(p){
-      var chip=document.createElement('span');
-      chip.style.cssText='display:inline-flex;align-items:center;gap:6px;padding:6px 12px;'
-        +'background:'+(selSharePlayer===p?playerColor(p):'#0e2240')+';'
-        +'border:1.5px solid '+(selSharePlayer===p?playerColor(p):'#24507e')+';'
-        +'border-radius:24px;cursor:pointer;font-size:12px;font-weight:700;'
-        +'color:'+(selSharePlayer===p?'#fff':'#7a9bb5')+';margin-right:6px;white-space:nowrap;vertical-align:middle;';
-      chip.innerHTML=playerAvatar(p,20)+' '+p;
-      (function(player){chip.onclick=function(){selSharePlayer=player;renderSharePlayerOnly();};})(p);
-      chips.appendChild(chip);
-    });
-  })();
-  // Profile card
-  var html='';
-  if(selSharePlayer){
-    var st=getPlayerStats(selSharePlayer,selShareWeek);
-    var lpts=getLuckyPoints(selSharePlayer,selShareWeek);
-    var bonus=lpts-getPoints(selSharePlayer,selShareWeek);
-    var udBonus=getUnderdogBonus(selSharePlayer,selShareWeek);
-    var col=playerColor(selSharePlayer);
-    html='<div style="background:linear-gradient(135deg,'+col+'22,#0e2240);border:1px solid '+col+'44;border-radius:14px;padding:16px;margin-bottom:12px;">'
-      +'<div style="display:flex;align-items:center;gap:14px;">'
-      +playerAvatar(selSharePlayer,56)
-      +'<div style="flex:1;">'
-      +'<div style="font-size:18px;font-weight:900;color:#fff;">'+selSharePlayer+'</div>'
-      +'<div style="font-size:12px;color:'+col+';margin-top:2px;font-weight:700;">'
-      +(st.curStreak>=2?'🔥 '+st.curStreak+'-match streak \u00b7 ':'')+st.participation+'% participated</div>'
-      +'</div>'
-      +'<div style="text-align:center;">'
-      +accuracyRing(st.acc,64,col)
-      +'<div style="font-size:10px;color:#7a9bb5;margin-top:-18px;position:relative;font-weight:700;">'+st.acc+'%</div>'
-      +'</div>'
-      +'</div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:14px;">'
-      +'<div style="background:#0a1f3d;border-radius:10px;padding:10px;text-align:center;">'
-      +'<div style="font-size:24px;font-weight:900;color:#00c853;">'+st.wins+'</div>'
-      +'<div style="font-size:10px;color:#7a9bb5;margin-top:2px;">\u2705 Correct</div></div>'
-      +'<div style="background:#0a1f3d;border-radius:10px;padding:10px;text-align:center;">'
-      +'<div style="font-size:24px;font-weight:900;color:#e74c3c;">'+st.losses+'</div>'
-      +'<div style="font-size:10px;color:#7a9bb5;margin-top:2px;">\u274c Wrong</div></div>'
-      +'<div style="background:#0a1f3d;border-radius:10px;padding:10px;text-align:center;">'
-      +'<div style="font-size:24px;font-weight:900;color:#1a8c4e;">'+lpts+'</div>'
-      +'<div style="font-size:10px;color:#7a9bb5;margin-top:2px;">'+(bonus>0?'🍀 +'+(bonus-udBonus>0?(bonus-udBonus):0)+' lucky':'')+(udBonus!==0?(bonus>0?' · ':'')+'🦅'+(udBonus>0?'+':'')+udBonus:'')+(bonus<=0&&udBonus===0?'\u2b50 pts':'')+'</div></div>'
-      +'</div>'
-      +'</div>';
-    html+=buildPlayerStatsHTML(selSharePlayer,gs,selShareWeek);
-  }
-  document.getElementById("shareStats").innerHTML=html;
 
-  renderH2H('shareH2H',selShareWeek);
-}
-
-// ── Poll ──────────────────────────────────────────────────────
 
 function formatKickoff(utcStr){
   if(!utcStr)return'';
@@ -2809,7 +2470,7 @@ function render(){
   const gs=getGroupStats(selWeek);const wkLabelTxt=weekLabel(selWeek);
   if(gs&&gs.playerRanks.length){
     const maxScore=gs.playerRanks[0].score||1;
-    const rankRows=gs.playerRanks.map(function(p,i){var barColor=i===0?'#1a8c4e':i===1?'#cbd5e1':i===2?'#cd7f32':'#3b82f6';var allL=[...luckyHistory];luckyMatchIds.forEach(function(mid){if(!allL.find(function(h){return h.id===mid;}))allL.push({id:mid,pts:luckyPtsMap[mid]||luckyPoints});});var lkTotal=0;allL.forEach(function(h){var lm=MATCHES.find(function(x){return x.id===h.id;});if(lm&&results[lm.id]&&predictions[lm.id]?.[p.name]===results[lm.id]&&(!selWeek||selWeek==='all'||lm.week===selWeek))lkTotal+=h.pts;});var lkBadge=lkTotal>0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;">🍀'+lkTotal+'pts</span>':'';var udTotal2=getUnderdogBonus(p.name,selWeek);var udBadge2=udTotal2!==0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;background:'+(udTotal2>0?'#8b5cf6':'#dc2626')+';color:#fff;">🦅'+(udTotal2>0?'+':'')+udTotal2+'pts</span>':'';var pdTotal2=getPerfectDayBonus(p.name,selWeek);var pdBadge2=pdTotal2>0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;background:#10b981;color:#fff;">🎯+'+pdTotal2+'pts</span>':'';var dmTotal2=getDeadmanBonus(p.name,selWeek);var dmBadge2=dmTotal2!==0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;background:'+(dmTotal2>0?'#dc2626':'#7a2020')+';color:#fff;">💀'+(dmTotal2>0?'+':'')+dmTotal2+'pts</span>':'';return'<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #16315a;">'+playerAvatar(p.name,38)+'<div style="flex:1;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="font-weight:800;font-size:13px;">'+p.name+'</span>'+lkBadge+udBadge2+pdBadge2+dmBadge2+'</div><div style="display:flex;gap:10px;font-size:10px;color:#7a9bb5;flex-wrap:wrap;"><span>✅ '+p.wins+' wins</span><span>🎯 '+p.acc+'%</span><span>📊 '+p.participation+'%</span>'+(p.curStreak>=2?'<span style="color:#f97316;">🔥'+p.curStreak+'</span>':'')+(p.boldPicks?'<span style="color:#a78bfa;">🦁'+p.boldPicks+'</span>':'')+'</div><div class="progress-bar" style="margin-top:5px;"><div class="progress-fill" style="width:'+Math.max(4,Math.round(p.score/maxScore*100))+'%;background:'+barColor+';"></div></div>'+buildSparkline(p.name,selWeek)+'</div><div style="text-align:center;position:relative;width:48px;flex-shrink:0;">'+accuracyRing(p.acc,48,barColor)+'<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:9px;color:#1a8c4e;font-weight:800;">'+p.acc+'%</div></div></div>';}).join('');
+    const rankRows=gs.playerRanks.map(function(p,i){var barColor=i===0?'#1a8c4e':i===1?'#cbd5e1':i===2?'#cd7f32':'#3b82f6';var allL=[...luckyHistory];luckyMatchIds.forEach(function(mid){if(!allL.find(function(h){return h.id===mid;}))allL.push({id:mid,pts:luckyPtsMap[mid]||luckyPoints});});var lkTotal=0;allL.forEach(function(h){var lm=MATCHES.find(function(x){return x.id===h.id;});if(lm&&results[lm.id]&&predictions[lm.id]?.[p.name]===results[lm.id]&&(!selWeek||selWeek==='all'||lm.week===selWeek))lkTotal+=h.pts;});var lkBadge=lkTotal>0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;">🍀'+lkTotal+'pts</span>':'';var udTotal2=getUnderdogBonus(p.name,selWeek);var udBadge2=udTotal2!==0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;background:'+(udTotal2>0?'#8b5cf6':'#dc2626')+';color:#fff;">🏏'+(udTotal2>0?'+':'')+udTotal2+'pts</span>':'';var pdTotal2=getPerfectDayBonus(p.name,selWeek);var pdBadge2=pdTotal2>0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;background:#10b981;color:#fff;">🎯+'+pdTotal2+'pts</span>':'';var dmTotal2=getDeadmanBonus(p.name,selWeek);var dmBadge2=dmTotal2!==0?'<span class="lucky-badge" style="font-size:9px;padding:1px 5px;background:'+(dmTotal2>0?'#dc2626':'#7a2020')+';color:#fff;">💀'+(dmTotal2>0?'+':'')+dmTotal2+'pts</span>':'';return'<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #16315a;">'+playerAvatar(p.name,38)+'<div style="flex:1;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="font-weight:800;font-size:13px;">'+p.name+'</span>'+lkBadge+udBadge2+pdBadge2+dmBadge2+'</div><div style="display:flex;gap:10px;font-size:10px;color:#7a9bb5;flex-wrap:wrap;"><span>✅ '+p.wins+' wins</span><span>🎯 '+p.acc+'%</span><span>📊 '+p.participation+'%</span>'+(p.curStreak>=2?'<span style="color:#f97316;">🔥'+p.curStreak+'</span>':'')+(p.boldPicks?'<span style="color:#a78bfa;">🦁'+p.boldPicks+'</span>':'')+'</div><div class="progress-bar" style="margin-top:5px;"><div class="progress-fill" style="width:'+Math.max(4,Math.round(p.score/maxScore*100))+'%;background:'+barColor+';"></div></div>'+buildSparkline(p.name,selWeek)+'</div><div style="text-align:center;position:relative;width:48px;flex-shrink:0;">'+accuracyRing(p.acc,48,barColor)+'<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:9px;color:#1a8c4e;font-weight:800;">'+p.acc+'%</div></div></div>';}).join('');
     document.getElementById("adminGroupStats").innerHTML='<div class="stat-card"><div class="stat-header">🎯 '+wkLabelTxt+' Rankings</div>'+rankRows+'</div>';
   } else {
     document.getElementById("adminGroupStats").innerHTML='<div style="background:#0e2240;border-radius:12px;padding:16px;text-align:center;color:#7a9bb5;font-size:12px;">No results for '+wkLabelTxt+' yet</div>';
