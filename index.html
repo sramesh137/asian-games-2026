@@ -115,21 +115,6 @@ input[type=text],input[type=password]{background:#1a3a66;border:1px solid #24507
 .confetti-piece{position:fixed;width:8px;height:8px;border-radius:2px;animation:confettiFall linear forwards;pointer-events:none;z-index:9999;}
 @keyframes confettiFall{0%{transform:translateY(-20px) rotate(0deg);opacity:1;}100%{transform:translateY(100vh) rotate(720deg);opacity:0;}}
 .lucky-badge{background:#1a8c4e;color:#000;font-size:10px;font-weight:900;padding:2px 8px;border-radius:10px;margin-left:6px;}
-.bracket-wrap{overflow-x:auto;padding-bottom:8px;}
-.bracket-grid{display:flex;gap:0;min-width:700px;}
-.bracket-round{flex:1;display:flex;flex-direction:column;padding:0 6px;}
-.bracket-round-title{font-size:10px;font-weight:800;color:#1a8c4e;text-align:center;padding:6px 0 10px;text-transform:uppercase;letter-spacing:1px;}
-.bracket-slots{display:flex;flex-direction:column;justify-content:space-around;flex:1;}
-.bracket-match{background:#0a1f3d;border:1px solid #1a3a66;border-radius:8px;margin:3px 0;overflow:hidden;}
-.bracket-match.locked{border-color:#1a8f4a;}
-.bracket-team{padding:5px 8px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:1px solid #16315a;}
-.bracket-team:last-child{border-bottom:none;}
-.bracket-team.selected{background:#1a3a2a;color:#00c853;}
-.bracket-team.winner{background:#1a3a2a;color:#00c853;}
-.bracket-team.eliminated{opacity:0.4;}
-.bracket-team.tbd{color:#3a5070;font-style:italic;}
-.bracket-score{font-size:9px;font-weight:800;margin-left:auto;color:#1a8c4e;}
-.bracket-pts{font-size:9px;color:#00c853;margin-left:4px;}
 .toggle-wrap{display:flex;align-items:center;gap:10px;}
 .toggle{position:relative;width:44px;height:24px;flex-shrink:0;}
 .toggle input{opacity:0;width:0;height:0;position:absolute;}
@@ -137,11 +122,6 @@ input[type=text],input[type=password]{background:#1a3a66;border:1px solid #24507
 .toggle-slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#5a7a99;border-radius:50%;transition:.2s;}
 .toggle input:checked+.toggle-slider{background:#1a5c2e;}
 .toggle input:checked+.toggle-slider:before{transform:translateX(20px);background:#1a8c4e;}
-#deployModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:800;align-items:center;justify-content:center;padding:20px;}
-#deployModal.open{display:flex;}
-.deploy-box{background:#0e2240;border:1px solid #1a8c4e;border-radius:20px;padding:24px;max-width:400px;width:100%;}
-.deploy-box h3{font-size:18px;font-weight:900;margin-bottom:8px;}
-.deploy-box p{font-size:12px;color:#7a9bb5;margin-bottom:16px;line-height:1.6;}
 #shareView{display:none;position:fixed;inset:0;background:#081428;z-index:500;overflow-y:auto;}
 #shareView.open{display:block;}
 .share-close{position:sticky;top:0;background:#081428;border-bottom:1px solid #1a3a66;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;z-index:10;}
@@ -149,24 +129,11 @@ body.share-mode #mainApp header,body.share-mode .tabs,body.share-mode #mainApp .
 body.share-mode #shareView{display:block;position:relative;z-index:1;}
 body.share-mode .close-btn{display:none;}
 body:not(.share-mode) .share-refresh{display:none;}
-body.share-mode #deployModal{display:none !important;}
 </style>
 </head>
 <body>
 
 <!-- DEPLOY MODAL -->
-<div id="deployModal">
-  <div class="deploy-box">
-    <h3>&#x1F680; Deploy to GitHub</h3>
-    <p>Paste your GitHub Personal Access Token. Used once, never stored.</p>
-    <input type="password" id="ghTokenInput" placeholder="ghp_xxxxxxxxxxxx" style="margin-bottom:14px;" />
-    <div style="display:flex;gap:8px;">
-      <button class="btn btn-green" style="flex:1;padding:12px;" onclick="doDeployNow()">&#x1F680; Deploy Now</button>
-      <button class="btn" style="padding:12px;" onclick="closeDeployModal()">Cancel</button>
-    </div>
-    <div id="deployStatus" style="margin-top:12px;font-size:12px;color:#7a9bb5;text-align:center;min-height:20px;"></div>
-  </div>
-</div>
 
 <!-- SHARE VIEW -->
 <div id="shareView">
@@ -219,7 +186,7 @@ body.share-mode #deployModal{display:none !important;}
     <div style="display:flex;gap:6px;align-items:center;">
       <button class="btn" style="padding:7px 10px;font-size:11px;" onclick="loadAll()">&#x1F504;</button>
       <button class="btn" style="padding:7px 10px;font-size:11px;" onclick="openShare()">&#x1F441; Stats</button>
-      <button class="btn btn-green" style="padding:7px 10px;font-size:11px;" onclick="openDeployModal()">&#x1F680; Deploy</button>
+      
       <span class="badge">ADMIN</span>
     </div>
   </header>
@@ -229,8 +196,7 @@ body.share-mode #deployModal{display:none !important;}
     <button class="tab-btn" data-tab="poll">&#x1F4E3; Poll</button>
     <button class="tab-btn" data-tab="stats">&#x1F4CA; Stats</button>
     <button class="tab-btn" data-tab="players">&#x1F465; Players</button>
-    <button class="tab-btn" data-tab="bracket">&#x1F3C6; Bracket</button>
-  </div>
+      </div>
   <div class="container">
     <div id="predict" class="tab-content active">
       <p class="hint">Enter WhatsApp poll results. Tap team name per player.</p>
@@ -274,17 +240,7 @@ body.share-mode #deployModal{display:none !important;}
       <div id="adminVisitorStats" style="margin-top:12px;"></div>
     </div>
     <div id="players" class="tab-content">
-      <div class="stat-card" style="margin-bottom:12px;">
-        <div class="stat-header">🔑 CricAPI Auto-Fetch</div>
-        <div style="padding:14px;">
-          <div style="font-size:11px;color:#7a9bb5;margin-bottom:8px;">Get your free API key at <b>cricketdata.org</b> — paste it here to auto-fetch match results</div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input type="text" id="cricApiKeyInput" placeholder="Paste your CricAPI key here..." style="flex:1;padding:8px 12px;background:#0e2240;border:1px solid #24507e;border-radius:8px;color:#fff;font-size:12px;" />
-            <button class="btn btn-green" onclick="saveCricApiKey(document.getElementById('cricApiKeyInput').value)" style="white-space:nowrap;">💾 Save &amp; Activate</button>
-          </div>
-          <div id="cricApiStatus" style="font-size:11px;margin-top:6px;color:#00c853;"></div>
-        </div>
-      </div>
+
       <p class="hint">Add, rename or remove players.</p>
       <div class="card">
         <div class="card-header">Add New Player</div>
@@ -294,10 +250,6 @@ body.share-mode #deployModal{display:none !important;}
         </div>
       </div>
       <div id="playerList"></div>
-    </div>
-    <div id="bracket" class="tab-content">
-      <p class="hint">Knockout bracket &mdash; open after group stage ends.</p>
-      
     </div>
   </div>
 </div>
@@ -341,7 +293,6 @@ const RANK_EMOJI=["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","
 /* HOW TO ADD MORE MATCHES: Add to MATCHES above with week:2 etc. */
 const SB_URL='https://addygbyyzttouiafdxhg.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkZHlnYnl5enR0b3VpYWZkeGhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5NzM5NTYsImV4cCI6MjEwMDU0OTk1Nn0.-1zt0lICxJXu6St1ES5ISO5qZKSEEvC0hs9n-C76rvU';
-const GH_OWNER='sramesh137',GH_REPO='asian-games-2026',GH_FILE='index.html';
 
 let players=[],predictions={},results={},history=[];
 let selPickDate="all",selResDate="all",selPollDate="all";
@@ -416,7 +367,6 @@ async function loadAll(){
     predictions={};(predR||[]).forEach(r=>{if(!predictions[r.match_id])predictions[r.match_id]={};predictions[r.match_id][r.player_name]=r.pick;});
     results={};(resR||[]).forEach(r=>{results[r.match_id]=r.result;});
     history=(histR||[]).map(r=>({ts:r.ts,text:r.content}));
-    bracketOpen=(settR||[]).some(r=>r.key==='bracket_open'&&r.value==='true');
     var _lmRow=(settR||[]).find(r=>r.key==='lucky_match_id');
     var _lpRow=(settR||[]).find(r=>r.key==='lucky_points');
     // Support comma-separated list of lucky match IDs
@@ -479,9 +429,10 @@ async function loadAll(){
         sbUpsert('settings',{key:'deadman_history_'+mid,value:String(deadmanPoints),updated_at:new Date().toISOString()}).catch(function(e){console.error(e);});
       }
     });
-    // Load CricAPI key
+    // Load CricAPI key — Supabase override takes priority, else hardcoded default is used
     var _ck=(settR||[]).find(function(r){return r.key==='cricapi_key';});
-    if(_ck&&_ck.value){cricApiKey=_ck.value;startCricAutoFetch();}
+    if(_ck&&_ck.value){cricApiKey=_ck.value;}
+    startCricAutoFetch();
     // Bold Pick loading — admin-flagged knockout matches
     boldPickMatchIds=new Set();boldPickHistory=[];
     (settR||[]).forEach(function(r){
@@ -791,13 +742,7 @@ async function renamePlayer(idx){const old=players[idx];if(old===undefined)retur
 
 
 // ── Deploy ────────────────────────────────────────────────────
-function openDeployModal(){document.getElementById("ghTokenInput").value='';document.getElementById("deployStatus").textContent='';document.getElementById("deployModal").classList.add("open");}
-function closeDeployModal(){document.getElementById("deployModal").classList.remove("open");}
-async function doDeployNow(){
-  const token=document.getElementById("ghTokenInput").value.trim();if(!token){document.getElementById("deployStatus").textContent="⚠️ Paste your token";return;}
-  document.getElementById("deployStatus").textContent="⏳ Deploying…";
-  try{const info=await fetch('https://api.github.com/repos/'+GH_OWNER+'/'+GH_REPO+'/contents/'+GH_FILE,{headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}}).then(r=>r.json());if(!info.sha){document.getElementById("deployStatus").textContent="❌ Invalid token or repo not found";return;}const encoded=btoa(unescape(encodeURIComponent(document.documentElement.outerHTML)));const res=await fetch('https://api.github.com/repos/'+GH_OWNER+'/'+GH_REPO+'/contents/'+GH_FILE,{method:'PUT',headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},body:JSON.stringify({message:'Update wc2026 app',content:encoded,sha:info.sha})});if(res.ok){document.getElementById("deployStatus").textContent="✅ Deployed! Live in ~30 sec";setTimeout(closeDeployModal,2000);}else{const e=await res.json();document.getElementById("deployStatus").textContent="❌ "+e.message;}}catch(e){document.getElementById("deployStatus").textContent="❌ "+e.message;console.error(e);}
-}
+
 
 // ── Helpers ───────────────────────────────────────────────────
 function getPoints(p,week){const ms=weekMatches(week||"all");return ms.reduce((s,m)=>{const res=results[m.id];if(!res)return s;const correct=predictions[m.id]?.[p]===res;const pick=predictions[m.id]?.[p];if(isKnockoutMatch(m)){if(!pick)return s;const rp=KNOCKOUT_ROUND_PTS[m.round];return s+(correct?rp.win:rp.loss);}return s+(correct?1:0);},0);}
@@ -1971,7 +1916,7 @@ function renderPoll(){
 // ── CricAPI Auto-Fetch Results ──────────────────────────────────
 // Automatically fetches live cricket scores from cricketdata.org
 // and enters results when a match ends. Admin sets API key in settings.
-var cricApiKey='';
+var cricApiKey='d65c3df3-b670-4ec2-8610-17a8ba42fd54'; // CricAPI key — cricketdata.org
 var cricFetchInterval=null;
 var cricLastFetch=0;
 
