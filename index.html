@@ -191,7 +191,7 @@ body.share-mode #deployModal{display:none !important;}
     <div id="shareLeaderboard" class="card" style="margin-bottom:12px;"></div>
     <div id="sharePredictions" style="margin-bottom:12px;"></div>
     <div id="shareResultCard" style="margin-bottom:12px;"></div>
-    <div id="shareBracket" style="margin-bottom:12px;"></div>
+    
     <div class="analysis-wrap">
       <button class="analysis-toggle" id="shareHOFToggle" onclick="toggleShareSection('shareHOFBody','shareHOFToggle','shareHOFArrow')">
         <span>🏅 Hall of Fame</span><span id="shareHOFArrow">▼</span>
@@ -297,7 +297,7 @@ body.share-mode #deployModal{display:none !important;}
     </div>
     <div id="bracket" class="tab-content">
       <p class="hint">Knockout bracket &mdash; open after group stage ends.</p>
-      <div id="adminBracket"></div>
+      
     </div>
   </div>
 </div>
@@ -409,14 +409,13 @@ const sbDelete=(t,q)=>sbFetch(t+'?'+q,{method:'DELETE'});
 async function loadAll(){
   setStatus("⏳ Loading…");
   try{
-    const[pR,predR,resR,histR,settR,bResR]=await Promise.all([
+    const[pR,predR,resR,histR,settR]=await Promise.all([
       sbGet('players','order=id.asc'),
       sbGet('predictions','order=match_id.asc'),
       sbGet('results','order=match_id.asc'),
       sbGet('history','order=id.desc&limit=30'),
       sbGet('settings'),
-      sbGet('bracket_results','order=round.asc'),
-    ]);
+      ]);
     players=(pR||[]).map(r=>r.name);
     predictions={};(predR||[]).forEach(r=>{if(!predictions[r.match_id])predictions[r.match_id]={};predictions[r.match_id][r.player_name]=r.pick;});
     results={};(resR||[]).forEach(r=>{results[r.match_id]=r.result;});
@@ -484,7 +483,6 @@ async function loadAll(){
         sbUpsert('settings',{key:'deadman_history_'+mid,value:String(deadmanPoints),updated_at:new Date().toISOString()}).catch(function(e){console.error(e);});
       }
     });
-    bracketResults={};(bResR||[]).forEach(r=>{bracketResults[r.round+'_'+r.slot]=r.winner;});
     // Load CricAPI key
     var _ck=(settR||[]).find(function(r){return r.key==='cricapi_key';});
     if(_ck&&_ck.value){cricApiKey=_ck.value;startCricAutoFetch();}
@@ -819,23 +817,6 @@ async function setResult(mid,val){const newVal=results[mid]===val?null:val;resul
     boldPickHistory.push({id:mid});
     sbUpsert('settings',{key:'bold_pick_history_'+mid,value:'true',updated_at:new Date().toISOString()}).catch(function(e){console.error(e);});
   }
-  // Knockout match: auto-advance the winner into the Bracket tracker, so admin
-  // never has to click twice (once in Results, once in Bracket) for the same result.
-  var _slotInfo=getBracketSlotForMatch(mid);
-  if(_slotInfo){
-    var _m=MATCHES.find(function(x){return x.id===mid;});
-    var _key=bracketKey(_slotInfo.round,_slotInfo.slot);
-    if(newVal){
-      var _winnerTeam=newVal==='home'?_m.home:newVal==='away'?_m.away:null;
-      if(_winnerTeam){
-        bracketResults[_key]=_winnerTeam;
-        sbUpsert('bracket_results',{round:_slotInfo.round,slot:_slotInfo.slot,winner:_winnerTeam,updated_at:new Date().toISOString()}).catch(function(e){console.error(e);});
-      }
-    } else {
-      delete bracketResults[_key];
-      sbDelete('bracket_results','round=eq.'+_slotInfo.round+'&slot=eq.'+_slotInfo.slot).catch(function(e){console.error(e);});
-    }
-  }
   render();try{if(newVal)await sbUpsert('results',{match_id:mid,result:newVal,updated_at:new Date().toISOString()});else await sbDelete('results','match_id=eq.'+mid);}catch(e){toast("❌ Save failed");console.error(e);}}
 async function addPlayer(){const inp=document.getElementById("newPlayerInput"),name=inp.value.trim();if(!name||players.includes(name)){toast("Empty or already exists");return;}try{await sbUpsert('players',{name});players.push(name);if(!selStatPlayer)selStatPlayer=name;render();inp.value="";toast("✓ "+name+" added!");}catch(e){toast("❌ Failed");console.error(e);}}
 async function removePlayerByIdx(idx){const name=players[idx];if(!name)return;if(!confirm("Remove "+name+"?"))return;try{await sbDelete('players','name=eq.'+encodeURIComponent(name));players=players.filter(p=>p!==name);if(selStatPlayer===name)selStatPlayer=players[0]||null;if(selSharePlayer===name)selSharePlayer=players[0]||null;render();toast("✓ Removed");}catch(e){toast("❌ Failed");console.error(e);}}
@@ -881,13 +862,15 @@ function weekLabel(w){
   return w;
 }
 function getRoundColorForWeek(w){
+  var CRICKET_ROUND_COLORS={'prelim':'#1a8c4e','qf':'#2563eb','sf':'#ea580c','bronze':'#92400e','gold':'#c9a227'};
   if(w==="all"||typeof w!=='number')return null;
   var weekMs=MATCHES.filter(function(m){return m.week===w&&m.round;});
-  var finalM=weekMs.find(function(m){return m.round==='final';});
-  var sample=finalM||weekMs[0];
-  if(!sample)return null;
+  // Gold takes priority over Bronze when both are in the same week
+  var goldM=weekMs.find(function(m){return m.round==='gold';});
+  var sample=goldM||weekMs[0];
+  if(!sample||!sample.round)return null;
   var rnd=BRACKET_ROUNDS.find(function(r){return r.id===sample.round;});
-  return rnd?rnd.color:null;
+  return rnd?rnd.color:(CRICKET_ROUND_COLORS[sample.round]||null);
 }
 function setAccentColor(week){
   var col=getRoundColorForWeek(week)||'#1a8c4e';
@@ -1785,7 +1768,6 @@ async function saveBracketResult(round,slot,winner){
     bracketResults[key]=winner;
     try{await sbUpsert('bracket_results',{round:round,slot:slot,winner:winner,updated_at:new Date().toISOString()});}catch(e){toast('❌ Save failed');console.error(e);}
   }
-  renderBracket('adminBracket',true);
 }
 
 async function saveBracketTeam(slot,side,team){
@@ -1796,7 +1778,6 @@ async function saveBracketTeam(slot,side,team){
   try{
     await sbUpsert('settings',{key:key,value:team,updated_at:new Date().toISOString()});
   }catch(e){toast('❌ Save failed');console.error(e);}
-  renderBracket('adminBracket',true);
 }
 
 function renderBracket(targetId, isAdmin){
@@ -2157,7 +2138,6 @@ const rows=gs.playerRanks.map(function(p,i){var barColor=i===0?'#1a8c4e':i===1?'
   renderFunStats('shareFunStats',selShareWeek);
   renderPredictions('sharePredictions',selShareWeek);
   renderResultCard('shareResultCard',selShareWeek);
-  renderBracket('shareBracket',false);
   // Hall of Fame and Week Rankings are collapsible — reset to closed on week change
   var hofBody=document.getElementById('shareHOFBody');
   if(hofBody){hofBody.style.display='none';}
@@ -2835,7 +2815,6 @@ function render(){
     document.getElementById("adminGroupStats").innerHTML='<div style="background:#0e2240;border-radius:12px;padding:16px;text-align:center;color:#7a9bb5;font-size:12px;">No results for '+wkLabelTxt+' yet</div>';
   }
   renderTitles('adminTitles');renderFunStats('adminFunStats',selWeek);
-  renderBracket('adminBracket',true);
   document.getElementById("statPlayerTabs").innerHTML=players.map(p=>'<button class="player-tab '+(selStatPlayer===p?'active':'')+'" onclick="selStatPlayer=\''+p+'\';render()">'+p+'</button>').join('');
   document.getElementById("statsContent").innerHTML=selStatPlayer?buildPlayerStatsHTML(selStatPlayer,gs,selWeek):'';
   renderH2H('adminH2H',selWeek);
